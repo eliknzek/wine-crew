@@ -1,0 +1,13 @@
+# Direct dependencies. Regenerate the lock with:
+#   uv pip compile requirements.in --python-version 3.13 -o requirements.txt
+crewai
+pandas
+numpy
+scikit-learn
+matplotlib
+pyyaml
+python-dotenv
+joblib
+kaggle
+streamlit
+pytest
