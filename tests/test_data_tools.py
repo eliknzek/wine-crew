@@ -21,11 +21,11 @@ def test_clean_data_is_deterministic(raw_df, config):
 
 def test_clean_data_report_counts(raw_df, config):
     clean, report = clean_data(raw_df, config)
-    assert report["rows_in"] == 15
+    assert report["rows_in"] == 35
     assert report["removed_duplicates"] == 1
     assert report["removed_missing_required"] == 2
     assert report["dropped_columns"] == ["region_2", "taster_twitter_handle"]
-    assert report["rows_out"] == len(clean) == 12
+    assert report["rows_out"] == len(clean) == 32
 
 
 def test_clean_data_rules(clean_df):
@@ -34,7 +34,7 @@ def test_clean_data_rules(clean_df):
     assert "region_2" not in clean_df.columns
     assert "taster_twitter_handle" not in clean_df.columns
     np.testing.assert_allclose(clean_df["log_price"], np.log(clean_df["price"]))
-    assert "Winery 23" in clean_df["winery"].tolist()
+    assert "Winery 43" in clean_df["winery"].tolist()
     assert "Merlot" in clean_df["variety"].astype(str).tolist()
     assert list(clean_df.index) == list(range(len(clean_df)))
 
@@ -63,8 +63,8 @@ def test_extract_vintage(title, expected):
 def test_vintage_column(clean_df):
     by_winery = dict(zip(clean_df["winery"], clean_df["vintage"]))
     assert by_winery["Winery 1"] == 2013
-    assert pd.isna(by_winery["Winery 22"])
-    assert by_winery["Winery 23"] == 2010
+    assert pd.isna(by_winery["Winery 42"])
+    assert by_winery["Winery 43"] == 2010
 
 
 def test_load_raw_returns_sha256(tmp_path, raw_df, config):

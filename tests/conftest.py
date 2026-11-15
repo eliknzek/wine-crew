@@ -36,12 +36,12 @@ def _row(i, **overrides):
 @pytest.fixture
 def raw_df():
     """Small raw frame shaped like winemag-data-130k-v2.csv, with known defects."""
-    rows = [_row(i) for i in range(10)]
+    rows = [_row(i) for i in range(30)]  # 1 missing vintage in 32 clean rows stays under 5%
     rows.append(_row(0))                                            # full duplicate of row 0
-    rows.append(_row(20, price=np.nan))                             # missing price
-    rows.append(_row(21, country=np.nan))                           # missing country
-    rows.append(_row(22, title="Winery 22 NV Brut (Champagne)"))    # no vintage
-    rows.append(_row(23, title="Winery 1975 2010 Merlot", winery="  Winery 23  ",
+    rows.append(_row(40, price=np.nan))                             # missing price
+    rows.append(_row(41, country=np.nan))                           # missing country
+    rows.append(_row(42, title="Winery 42 NV Brut (Champagne)"))    # no vintage
+    rows.append(_row(43, title="Winery 1975 2010 Merlot", winery="  Winery 43  ",
                      variety=" Merlot "))                           # year outside range first, whitespace
     df = pd.DataFrame(rows, columns=RAW_COLUMNS)
     df.index = range(100, 100 + len(df))
