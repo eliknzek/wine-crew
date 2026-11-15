@@ -7,6 +7,8 @@ paths:
   artifacts_scientist: artifacts/scientist
   logs: logs
   contract_template: docs/dataset_contract.json
+  clean_data: artifacts/analyst/clean_data.csv
+  contract: artifacts/analyst/dataset_contract.json
   run_summary: artifacts/run_summary.json
 
 data_source:
@@ -16,6 +18,8 @@ data_source:
 cleaning:
   vintage_min: 1980
   vintage_max: 2017
+  required_columns: [price, country, variety]          # rows missing any of these are dropped
+  drop_columns: [region_2, taster_twitter_handle]
 
 features:
   min_category_count: 50   # categories with fewer rows become "Other"
