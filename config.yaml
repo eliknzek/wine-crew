@@ -9,6 +9,10 @@ paths:
   contract_template: docs/dataset_contract.json
   clean_data: artifacts/analyst/clean_data.csv
   contract: artifacts/analyst/dataset_contract.json
+  eda_summary: artifacts/analyst/eda_summary.json
+  charts_dir: artifacts/analyst/charts
+  eda_report: artifacts/analyst/eda_report.html
+  insights: artifacts/analyst/insights.md
   run_summary: artifacts/run_summary.json
 
 data_source:
