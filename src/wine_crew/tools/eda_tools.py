@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +150,7 @@ def eda_summary(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
     eda_price = _price_bands(df, eda["price_bands"], eda["plateau_gain_per_doubling"])
     return {
         "row_count": int(len(df)),
+        "top_n": int(eda["top_n"]),
         "points": _describe(df["points"]),
         "price": _describe(df["price"]),
         "corr_points_log_price": _r(df["points"].corr(df["log_price"])),
@@ -174,6 +176,50 @@ def eda_summary(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
             "shares_pct": {str(k): _r(v, 2) for k, v in country_share.iloc[: eda["top_n"]].items()},
         },
     }
+
+
+# --------------------------------------------------------------------------- insights check
+
+_NUMBER = re.compile(r"(?<![\d.])\d[\d,]*(?:\.\d+)?")
+_LIST_MARKER = re.compile(r"^\s*(?:#{1,6}\s*)?\d+[.)]\s", re.MULTILINE)
+
+
+def _summary_numbers(obj: Any) -> list[float]:
+    """Every number in the summary, including numbers inside strings such as "$4-$10"."""
+    out: list[float] = []
+    if isinstance(obj, bool) or obj is None:
+        return out
+    if isinstance(obj, (int, float)):
+        out.append(float(obj))
+    elif isinstance(obj, str):
+        out.extend(float(m.replace(",", "")) for m in _NUMBER.findall(obj))
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            out.extend(_summary_numbers(k))
+            out.extend(_summary_numbers(v))
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            out.extend(_summary_numbers(v))
+    return out
+
+
+def insight_number_violations(text: str, summary: dict[str, Any]) -> list[str]:
+    """Numbers in text that are not a rounding of some number in summary.
+
+    A number written with d decimals matches a summary value v when it is within
+    half a unit of the d-th decimal (so 45% matches 45.04 and 88.6 matches 88.56).
+    Numbered-list markers ("1. ") are not counted as numbers.
+    """
+    values = sorted(set(_summary_numbers(summary)))
+    body = _LIST_MARKER.sub("", text)
+    violations: list[str] = []
+    for token in _NUMBER.findall(body):
+        number = float(token.replace(",", ""))
+        decimals = len(token.split(".")[1]) if "." in token else 0
+        tolerance = 0.5 * 10 ** (-decimals) + 1e-9
+        if not any(abs(v - number) <= tolerance for v in values):
+            violations.append(token)
+    return list(dict.fromkeys(violations))
 
 
 # --------------------------------------------------------------------------- charts
