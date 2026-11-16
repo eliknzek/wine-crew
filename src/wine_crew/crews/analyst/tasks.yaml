@@ -32,34 +32,47 @@ insights_task:
     insights.md in Hebrew for the wine buyer of a retail chain, in plain
     business language. Country and variety names may stay in English.
 
-    Use exactly these four "##" headings, in this order:
+    Use exactly these four "##" headings, in this order. Where a template is
+    given, copy it word for word and replace only the <placeholders>. Each
+    placeholder names a JSON field and how to write it: "rounded" means round
+    to a whole number (28.73 -> 29, 88.0 -> 88, 25.0 -> 25); "as is" means
+    copy the value unchanged. Never write a value like 28.73% or 90.0.
+
     "## באיזה טווח מחיר העלייה בניקוד מאטה?"
-      Use price_bands (gain_per_price_doubling, plateau_starts_at_band). The
-      score keeps rising with price; explain from which band each price
-      doubling adds little score. Never say the score stops rising.
+      One sentence saying the score keeps rising with price, then this line:
+      החל מ-$<price_bands.plateau_from_price, rounded>, כל הכפלה של המחיר מוסיפה רק <price_bands.plateau_gain_per_doubling, as is> נקודות ניקוד.
+      Never write "מעל טווח זה" and never say the score stops rising.
+
     "## אילו מדינות וזנים נותנים ניקוד גבוה במחיר נמוך?"
-      Name ONLY the countries in value_countries and the varieties in
-      value_varieties, with their median_points and median_price. Do not pick
-      other countries or varieties from by_country or by_variety.
+      First this definition line:
+      ההגדרה: ניקוד חציוני של <overall_median_points, rounded> ומעלה, ומחיר חציוני של $<overall_median_price, rounded> ומטה, ביחס לכלל היינות.
+      Then the sub-heading "### מדינות" with one bullet per entry in
+      value_countries, and the sub-heading "### זנים" with one bullet per
+      entry in value_varieties. Each bullet:
+      - **<name, as is>**: ניקוד חציוני <median_points, rounded>, מחיר חציוני $<median_price, rounded>
+      Name ONLY entries from value_countries and value_varieties.
+
     "## היכן הנתונים מוטים?"
-      Use country_bias and missing_pct.
+      One or two sentences from country_bias (percentages rounded), then this line:
+      - ערכים חסרים: <missing_pct.region_1, rounded>% מהיינות ללא נתוני אזור, ו-<missing_pct.designation, rounded>% ללא שם הסדרה/היין.
+
     "## המלצות לקנייה"
-      Exactly 3 "-" bullets. The third bullet explains that above the
-      plateau band each price doubling adds little score, so the buyer's
-      money is worth more in the lower price bands. Do not recommend the most
-      expensive wines.
+      Exactly 3 "-" bullets. Do not recommend the most expensive wines.
+      The third bullet is this line:
+      - החל מ-$<price_bands.plateau_from_price, rounded>, כל הכפלה של המחיר מוסיפה רק <price_bands.plateau_gain_per_doubling, as is> נקודות ניקוד, ולכן הכסף שווה יותר בטווחי המחיר הנמוכים.
 
     Hebrew terms (use exactly these, never mix median and mean):
     points = "ניקוד" (not "דירוג"); median_points = "ניקוד חציוני";
     mean_points = "ניקוד ממוצע"; median_price = "מחיר חציוני";
     share_pct = "אחוז מהיינות"; missing_pct = "אחוז ערכים חסרים".
-    Column names: region_1 = "אזור"; designation = "שם הסדרה/היין";
+    Column names: region_1 = "נתוני אזור"; designation = "שם הסדרה/היין";
     taster_name = "שם הטועם"; vintage = "בציר". Never translate column names
-    literally (not "האזור הראשון", not "הגדרה").
+    literally (not "האזור הראשון", not "עמודת ההגדרה").
 
     Rounding: write points as whole numbers (90, not 90.0); write percentages
     as whole numbers (45%, not 45.0% or 45.04%); write prices with "$" and no
-    decimals ($25).
+    decimals ($25). The one exception is plateau_gain_per_doubling: copy it as
+    is (for example 0.74).
 
     Rules: use "-" bullets, not numbered lists. Do not add numbers that are not
     in the JSON (no differences, ratios or percentages you calculate yourself).

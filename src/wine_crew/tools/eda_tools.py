@@ -110,15 +110,18 @@ def _price_bands(df: pd.DataFrame, edges: list[float], plateau_gain: float) -> d
             row["gain_vs_previous"] = _r(gain, 2)
             row["gain_per_price_doubling"] = _r(gain / doublings, 2)
         prev = row
-    plateau = next(
-        (r["band"] for r in rows
+    plateau_row = next(
+        (r for r in rows
          if r["gain_per_price_doubling"] is not None and r["gain_per_price_doubling"] < plateau_gain),
         None,
     )
     return {
         "bands": rows,
         "plateau_gain_per_doubling_threshold": plateau_gain,
-        "plateau_starts_at_band": plateau,
+        "plateau_starts_at_band": plateau_row["band"] if plateau_row else None,
+        # Explicit fields so the Insights Writer fills its template without reading the bands table.
+        "plateau_from_price": plateau_row["low"] if plateau_row else None,
+        "plateau_gain_per_doubling": plateau_row["gain_per_price_doubling"] if plateau_row else None,
     }
 
 
@@ -230,10 +233,19 @@ INSIGHT_HEADINGS = [
 ]
 FORBIDDEN_PHRASES = {
     "מפסיק לעלות": "the score keeps rising; say the gain slows ('מאטה')",
-    "האזור הראשון": "region_1 is 'אזור'",
+    "אזור הראשון": "region_1 is 'נתוני אזור'",
     "קטגוריית ההגדרה": "designation is 'שם הסדרה/היין'",
+    "עמודת ההגדרה": "designation is 'שם הסדרה/היין'",
     "דירוג": "points is 'ניקוד'",
+    "מעל טווח זה": "the plateau band is the top band; use the 'החל מ-$' template",
 }
+VALUE_SUBHEADINGS = ["### מדינות", "### זנים"]
+MISSING_TERMS = ["נתוני אזור", "שם הסדרה/היין"]
+PLATEAU_PHRASE = "כל הכפלה של המחיר מוסיפה רק"
+
+
+def _price(x: float) -> str:
+    return f"${x:g}"
 _TRAILING_ZERO = re.compile(r"(?<![\d.])\d+\.0(?!\d)")
 _LONG_PERCENT = re.compile(r"(?<![\d.])\d+\.\d{2,}\s*%")
 
@@ -277,7 +289,24 @@ def insight_style_violations(text: str, summary: dict[str, Any]) -> list[str]:
         out.append(f"round the percentage {token.strip()} to a whole number")
 
     value_section = _section(text, INSIGHT_HEADINGS[1])
-    allowed = {r["name"] for r in summary.get("value_countries", []) + summary.get("value_varieties", [])}
+    for sub in VALUE_SUBHEADINGS:
+        if sub not in value_section:
+            out.append(f"section 2 needs the sub-heading '{sub}'")
+    bias_section = _section(text, INSIGHT_HEADINGS[2])
+    for term in MISSING_TERMS:
+        if term not in bias_section:
+            out.append(f"section 3 must use the missing-values template with '{term}'")
+
+    bands = summary.get("price_bands", {})
+    if bands.get("plateau_from_price") is not None:
+        expected = f"החל מ-{_price(bands['plateau_from_price'])}"
+        for idx in (0, 3):
+            section = _section(text, INSIGHT_HEADINGS[idx])
+            if section and (expected not in section or PLATEAU_PHRASE not in section):
+                out.append(f"section '{INSIGHT_HEADINGS[idx]}' must use the template "
+                           f"'{expected}, {PLATEAU_PHRASE} <gain> נקודות'")
+
+    allowed ={r["name"] for r in summary.get("value_countries", []) + summary.get("value_varieties", [])}
     candidates = [r["name"] for r in summary.get("by_country", []) + summary.get("by_variety", [])]
     for name in _names_in(value_section, candidates + sorted(allowed)):
         if name not in allowed:

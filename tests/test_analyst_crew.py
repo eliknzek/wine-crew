@@ -63,7 +63,8 @@ class _Out:
 
 def _insights(bias_line: str) -> str:
     h1, h2, h3, h4 = INSIGHT_HEADINGS
-    return f"{h1}\n- מאטה.\n\n{h2}\n- Austria.\n\n{h3}\n{bias_line}\n\n{h4}\n- המלצה."
+    return (f"{h1}\n- מאטה.\n\n{h2}\n### מדינות\n- Austria.\n### זנים\n- Riesling.\n\n"
+            f"{h3}\n{bias_line}\n- ערכים חסרים: ללא נתוני אזור וללא שם הסדרה/היין.\n\n{h4}\n- המלצה.")
 
 
 def test_guardrail_accepts_summary_numbers_and_rejects_invented_ones(tmp_path):
