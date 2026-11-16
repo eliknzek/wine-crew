@@ -64,3 +64,45 @@ def small_contract(config):
 @pytest.fixture
 def clean_df(raw_df, config):
     return clean_data(raw_df, config)[0]
+
+
+@pytest.fixture
+def model_config(config):
+    """Real config with thresholds scaled down for a few hundred rows."""
+    cfg = copy.deepcopy(config)
+    cfg["features"]["min_category_count"] = 5
+    cfg["model"]["hgb"]["max_iter"] = 50
+    return cfg
+
+
+@pytest.fixture(scope="session")
+def model_df():
+    """~600 clean rows where points depend on price, country and variety, plus noise."""
+    rng = np.random.default_rng(42)
+    n = 600
+    countries = {"US": 0.0, "France": 1.5, "Italy": 1.0, "Chile": -1.5, "Portugal": 0.5}
+    varieties = {"Pinot Noir": 1.0, "Merlot": -0.5, "Riesling": 0.5, "Malbec": -1.0}
+    country = rng.choice(list(countries), size=n)
+    variety = rng.choice(list(varieties), size=n)
+    country[:3] = "Rareland"          # rare category -> Other
+    price = np.round(np.exp(rng.normal(3.2, 0.7, size=n)), 0).clip(4, 3300)
+    noise = rng.normal(0, 1.0, size=n)
+    points = 76 + 3.5 * np.log(price) + np.vectorize(countries.get)(country, 0.0) \
+        + np.vectorize(varieties.get)(variety) + noise
+    vintage = rng.integers(1995, 2017, size=n).astype(object)
+    vintage[rng.random(n) < 0.03] = None
+    rows = []
+    for i in range(n):
+        year = f" {vintage[i]}" if vintage[i] is not None else " NV"
+        rows.append(_row(
+            i,
+            country=country[i],
+            province=f"{country[i]} province {i % 3}",
+            region_1=f"{country[i]} region {i % 4}" if i % 7 else np.nan,
+            variety=variety[i],
+            price=float(price[i]),
+            points=int(np.clip(np.round(points[i]), 80, 100)),
+            title=f"Winery {i}{year} {variety[i]}",
+        ))
+    raw = pd.DataFrame(rows, columns=RAW_COLUMNS)
+    return clean_data(raw, load_config())[0]
