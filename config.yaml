@@ -22,11 +22,22 @@ cleaning:
   drop_columns: [region_2, taster_twitter_handle]
 
 features:
-  min_category_count: 50   # categories with fewer rows become "Other"
+  min_category_count: 50   # categories with fewer training rows become "Other"
+  numeric: [price, vintage]                     # raw inputs; log_price and vintage_missing are derived in the pipeline
+  categorical: [country, province, variety]
+  v2_extra: [region_1]                          # used by v2 only
 
 model:
   test_size: 0.2
   cv_folds: 5
+  ridge_alpha: 1.0
+  hgb:
+    max_iter: 300
+    learning_rate: 0.1
+    max_categories: 255    # HistGradientBoosting supports at most 255 categories per feature
+    early_stopping: false
+  selection_metric: cv_mae # pick v1/v2 by mean CV MAE on the training set
+  value_top_n: 50
 
 llm:
   model: gpt-4o-mini
