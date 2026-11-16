@@ -5,7 +5,12 @@ import json
 import pytest
 from crewai import Process
 
-from wine_crew.crews.analyst.crew import AnalystCrew, make_insights_guardrail, strip_fences
+from wine_crew.crews.analyst.crew import (
+    AnalystCrew,
+    make_files_guardrail,
+    make_insights_guardrail,
+    strip_fences,
+)
 
 EXPECTED_TOOLS = {
     "Data Cleaner": {"load_raw", "clean_data"},
@@ -63,6 +68,19 @@ def test_guardrail_accepts_summary_numbers_and_rejects_invented_ones(tmp_path):
     assert ok and text == "## הטיה\n- 45% מארה\"ב"
     ok, message = guardrail(_Out("- 45% מארה\"ב ו-17% מצרפת"))
     assert not ok and "17" in message
+
+
+def test_every_task_has_a_guardrail(analyst):
+    assert all(t.guardrail is not None for t in analyst.crew().tasks)
+
+
+def test_files_guardrail_requires_tool_outputs(tmp_path):
+    report = tmp_path / "eda_report.html"
+    guardrail = make_files_guardrail([report])
+    ok, message = guardrail(_Out("done"))
+    assert not ok and "eda_report.html" in message
+    report.write_text("<html></html>")
+    assert guardrail(_Out("done")) == (True, "done")
 
 
 def test_guardrail_fails_without_summary(tmp_path):

@@ -17,7 +17,9 @@ eda_task:
     2. Call make_charts with clean_csv_path="{clean_csv}" and charts_dir="{charts_dir}".
     3. Call build_html_report with summary_json_path="{summary_json}",
        charts_dir="{charts_dir}" and output_html_path="{report_html}".
-    Report the files created and the headline numbers returned by eda_summary.
+    You must call all three tools, in this order; the task is not done until
+    eda_report.html exists. Report the files created and the headline numbers
+    returned by eda_summary.
   expected_output: >
     The paths of eda_summary.json, the charts and eda_report.html, with the
     headline numbers from the eda_summary tool.
@@ -37,6 +39,13 @@ insights_task:
        value_countries, value_varieties, by_country and by_variety.
     3. Where is the data biased? Use country_bias and missing_pct.
     End with a short "## המלצות לקנייה" section of 3 bullet points.
+
+    Hebrew terms (use exactly these, never mix median and mean):
+    points = "ניקוד" (not "דירוג"); median_points = "ניקוד חציוני";
+    mean_points = "ניקוד ממוצע"; median_price = "מחיר חציוני";
+    share_pct = "אחוז מהיינות"; missing_pct = "אחוז ערכים חסרים".
+    The price plateau is where the gain per price doubling drops, not where
+    the score stops completely; say so. Write prices with "$".
 
     Rules: use "-" bullets, not numbered lists. Do not add numbers that are not
     in the JSON (no differences, ratios or percentages you calculate yourself).

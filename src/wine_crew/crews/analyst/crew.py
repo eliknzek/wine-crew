@@ -82,6 +82,21 @@ def make_insights_guardrail(summary_json: Path):
     return guardrail
 
 
+def make_files_guardrail(required: list[Path]):
+    """Guardrail: pass only if the task's tools actually wrote every required file."""
+
+    def guardrail(output):  # (TaskOutput) -> tuple[bool, Any]; unannotated, see above
+        missing = [p for p in required if not p.exists()]
+        if missing:
+            return False, (
+                "These files were not created: " + ", ".join(str(p) for p in missing)
+                + ". Call the remaining tools from the task description with the exact paths given."
+            )
+        return True, output.raw
+
+    return guardrail
+
+
 @CrewBase
 class AnalystCrew:
     """Crew 1. Construct with a config and output directory, then kickoff(inputs=self.inputs())."""
@@ -125,11 +140,14 @@ class AnalystCrew:
 
     @task
     def clean_task(self) -> Task:
-        return Task(config=self.tasks_config["clean_task"])
+        return Task(config=self.tasks_config["clean_task"],
+                    guardrail=make_files_guardrail([self.paths["clean_csv"]]))
 
     @task
     def eda_task(self) -> Task:
-        return Task(config=self.tasks_config["eda_task"])
+        p = self.paths
+        return Task(config=self.tasks_config["eda_task"],
+                    guardrail=make_files_guardrail([p["summary_json"], p["charts_dir"], p["report_html"]]))
 
     @task
     def insights_task(self) -> Task:
@@ -139,7 +157,8 @@ class AnalystCrew:
 
     @task
     def contract_task(self) -> Task:
-        return Task(config=self.tasks_config["contract_task"])
+        return Task(config=self.tasks_config["contract_task"],
+                    guardrail=make_files_guardrail([self.paths["contract_json"]]))
 
     @crew
     def crew(self) -> Crew:

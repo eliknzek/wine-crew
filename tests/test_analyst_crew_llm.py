@@ -28,6 +28,13 @@ def test_analyst_crew_end_to_end(tmp_path, monkeypatch, config):
 
     result = run_analyst(config, out_dir=tmp_path)
 
+    # Print before asserting, so time and tokens are never lost on a failure.
+    print("\n=== RUN ===")
+    print(json.dumps({"seconds": result["seconds"], "token_usage": result["token_usage"]}, indent=2))
+    print("=== TASK OUTPUTS ===")
+    for name, text in result["task_outputs"].items():
+        print(f"--- {name} ---\n{text}\n")
+
     summary = json.loads((tmp_path / "eda_summary.json").read_text(encoding="utf-8"))
     insights = (tmp_path / "insights.md").read_text(encoding="utf-8")
     assert insight_number_violations(insights, summary) == []
@@ -37,9 +44,3 @@ def test_analyst_crew_end_to_end(tmp_path, monkeypatch, config):
     assert ct.run_validate_contract(config, str(tmp_path / "clean_data.csv"),
                                     str(tmp_path / "dataset_contract.json"))["passed"]
     assert contract["source"]["sha256"]
-
-    print("\n=== RUN ===")
-    print(json.dumps({"seconds": result["seconds"], "token_usage": result["token_usage"]}, indent=2))
-    print("=== TASK OUTPUTS ===")
-    for name, text in result["task_outputs"].items():
-        print(f"--- {name} ---\n{text}\n")
