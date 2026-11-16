@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -109,15 +110,18 @@ def _price_bands(df: pd.DataFrame, edges: list[float], plateau_gain: float) -> d
             row["gain_vs_previous"] = _r(gain, 2)
             row["gain_per_price_doubling"] = _r(gain / doublings, 2)
         prev = row
-    plateau = next(
-        (r["band"] for r in rows
+    plateau_row = next(
+        (r for r in rows
          if r["gain_per_price_doubling"] is not None and r["gain_per_price_doubling"] < plateau_gain),
         None,
     )
     return {
         "bands": rows,
         "plateau_gain_per_doubling_threshold": plateau_gain,
-        "plateau_starts_at_band": plateau,
+        "plateau_starts_at_band": plateau_row["band"] if plateau_row else None,
+        # Explicit fields so the Insights Writer fills its template without reading the bands table.
+        "plateau_from_price": plateau_row["low"] if plateau_row else None,
+        "plateau_gain_per_doubling": plateau_row["gain_per_price_doubling"] if plateau_row else None,
     }
 
 
@@ -149,6 +153,7 @@ def eda_summary(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
     eda_price = _price_bands(df, eda["price_bands"], eda["plateau_gain_per_doubling"])
     return {
         "row_count": int(len(df)),
+        "top_n": int(eda["top_n"]),
         "points": _describe(df["points"]),
         "price": _describe(df["price"]),
         "corr_points_log_price": _r(df["points"].corr(df["log_price"])),
@@ -174,6 +179,139 @@ def eda_summary(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
             "shares_pct": {str(k): _r(v, 2) for k, v in country_share.iloc[: eda["top_n"]].items()},
         },
     }
+
+
+# --------------------------------------------------------------------------- insights check
+
+_NUMBER = re.compile(r"(?<![\d.])\d[\d,]*(?:\.\d+)?")
+_LIST_MARKER = re.compile(r"^\s*(?:#{1,6}\s*)?\d+[.)]\s", re.MULTILINE)
+
+
+def _summary_numbers(obj: Any) -> list[float]:
+    """Every number in the summary, including numbers inside strings such as "$4-$10"."""
+    out: list[float] = []
+    if isinstance(obj, bool) or obj is None:
+        return out
+    if isinstance(obj, (int, float)):
+        out.append(float(obj))
+    elif isinstance(obj, str):
+        out.extend(float(m.replace(",", "")) for m in _NUMBER.findall(obj))
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            out.extend(_summary_numbers(k))
+            out.extend(_summary_numbers(v))
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            out.extend(_summary_numbers(v))
+    return out
+
+
+def insight_number_violations(text: str, summary: dict[str, Any]) -> list[str]:
+    """Numbers in text that are not a rounding of some number in summary.
+
+    A number written with d decimals matches a summary value v when it is within
+    half a unit of the d-th decimal (so 45% matches 45.04 and 88.6 matches 88.56).
+    Numbered-list markers ("1. ") are not counted as numbers.
+    """
+    values = sorted(set(_summary_numbers(summary)))
+    body = _LIST_MARKER.sub("", text)
+    violations: list[str] = []
+    for token in _NUMBER.findall(body):
+        number = float(token.replace(",", ""))
+        decimals = len(token.split(".")[1]) if "." in token else 0
+        tolerance = 0.5 * 10 ** (-decimals) + 1e-9
+        if not any(abs(v - number) <= tolerance for v in values):
+            violations.append(token)
+    return list(dict.fromkeys(violations))
+
+
+INSIGHT_HEADINGS = [
+    "## באיזה טווח מחיר העלייה בניקוד מאטה?",
+    "## אילו מדינות וזנים נותנים ניקוד גבוה במחיר נמוך?",
+    "## היכן הנתונים מוטים?",
+    "## המלצות לקנייה",
+]
+FORBIDDEN_PHRASES = {
+    "מפסיק לעלות": "the score keeps rising; say the gain slows ('מאטה')",
+    "אזור הראשון": "region_1 is 'נתוני אזור'",
+    "קטגוריית ההגדרה": "designation is 'שם הסדרה/היין'",
+    "עמודת ההגדרה": "designation is 'שם הסדרה/היין'",
+    "דירוג": "points is 'ניקוד'",
+    "מעל טווח זה": "the plateau band is the top band; use the 'החל מ-$' template",
+}
+VALUE_SUBHEADINGS = ["### מדינות", "### זנים"]
+MISSING_TERMS = ["נתוני אזור", "שם הסדרה/היין"]
+PLATEAU_PHRASE = "כל הכפלה של המחיר מוסיפה רק"
+
+
+def _price(x: float) -> str:
+    return f"${x:g}"
+_TRAILING_ZERO = re.compile(r"(?<![\d.])\d+\.0(?!\d)")
+_LONG_PERCENT = re.compile(r"(?<![\d.])\d+\.\d{2,}\s*%")
+
+
+def _section(text: str, heading: str) -> str:
+    start = text.find(heading)
+    if start < 0:
+        return ""
+    rest = text[start + len(heading):]
+    nxt = rest.find("\n## ")
+    return rest if nxt < 0 else rest[:nxt]
+
+
+def _names_in(text: str, names: list[str]) -> list[str]:
+    """Names mentioned in text, longest first so "Red Blend" is not found inside "Bordeaux-style Red Blend"."""
+    found = []
+    for name in sorted(set(names), key=len, reverse=True):
+        pattern = re.compile(rf"(?<!\w){re.escape(name)}(?!\w)")
+        if pattern.search(text):
+            found.append(name)
+            text = pattern.sub(" ", text)
+    return found
+
+
+def insight_style_violations(text: str, summary: dict[str, Any]) -> list[str]:
+    """Deterministic style rules for insights.md: headings, terms, rounding, value-only picks."""
+    out: list[str] = []
+    positions = [text.find(h) for h in INSIGHT_HEADINGS]
+    for heading, pos in zip(INSIGHT_HEADINGS, positions):
+        if pos < 0:
+            out.append(f"missing heading: {heading}")
+    found = [p for p in positions if p >= 0]
+    if found != sorted(found):
+        out.append("headings are not in the required order")
+    for phrase, why in FORBIDDEN_PHRASES.items():
+        if phrase in text:
+            out.append(f"do not write '{phrase}': {why}")
+    for token in dict.fromkeys(_TRAILING_ZERO.findall(text)):
+        out.append(f"write {token} as a whole number ({token[:-2]})")
+    for token in dict.fromkeys(_LONG_PERCENT.findall(text)):
+        out.append(f"round the percentage {token.strip()} to a whole number")
+
+    value_section = _section(text, INSIGHT_HEADINGS[1])
+    for sub in VALUE_SUBHEADINGS:
+        if sub not in value_section:
+            out.append(f"section 2 needs the sub-heading '{sub}'")
+    bias_section = _section(text, INSIGHT_HEADINGS[2])
+    for term in MISSING_TERMS:
+        if term not in bias_section:
+            out.append(f"section 3 must use the missing-values template with '{term}'")
+
+    bands = summary.get("price_bands", {})
+    if bands.get("plateau_from_price") is not None:
+        expected = f"החל מ-{_price(bands['plateau_from_price'])}"
+        for idx in (0, 3):
+            section = _section(text, INSIGHT_HEADINGS[idx])
+            if section and (expected not in section or PLATEAU_PHRASE not in section):
+                out.append(f"section '{INSIGHT_HEADINGS[idx]}' must use the template "
+                           f"'{expected}, {PLATEAU_PHRASE} <gain> נקודות'")
+
+    allowed ={r["name"] for r in summary.get("value_countries", []) + summary.get("value_varieties", [])}
+    candidates = [r["name"] for r in summary.get("by_country", []) + summary.get("by_variety", [])]
+    for name in _names_in(value_section, candidates + sorted(allowed)):
+        if name not in allowed:
+            out.append(f"{name} is not in value_countries or value_varieties; name only those")
+    return out
 
 
 # --------------------------------------------------------------------------- charts

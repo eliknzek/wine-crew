@@ -40,6 +40,16 @@ def test_eda_summary_contents(model_df, eda_config):
     assert set(s["missing_pct"]) == set(model_df.columns)
     assert 0 < s["country_bias"]["top_country_share_pct"] <= 100
     assert s["corr_points_log_price"] > 0.5  # the sample is built with points rising in log price
+    # Explicit fields the insights templates read.
+    assert isinstance(s["overall_median_points"], float)
+    assert isinstance(s["overall_median_price"], float)
+    bands = s["price_bands"]
+    if bands["plateau_starts_at_band"] is not None:
+        row = next(b for b in bands["bands"] if b["band"] == bands["plateau_starts_at_band"])
+        assert bands["plateau_from_price"] == row["low"]
+        assert bands["plateau_gain_per_doubling"] == row["gain_per_price_doubling"]
+    else:
+        assert bands["plateau_from_price"] is None and bands["plateau_gain_per_doubling"] is None
     for r in s["value_countries"] + s["value_varieties"]:
         assert r["median_points"] >= s["overall_median_points"]
         assert r["median_price"] <= s["overall_median_price"]

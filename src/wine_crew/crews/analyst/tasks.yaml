@@ -1,1 +1,94 @@
-# tasks for the analyst crew. Filled in step 3.
+# Paths in {braces} come from AnalystCrew.inputs() at kickoff.
+
+clean_task:
+  description: >
+    1. Call load_raw with raw_csv_path="{raw_csv}".
+    2. Call clean_data with raw_csv_path="{raw_csv}" and output_csv_path="{clean_csv}".
+    Report the raw row count, the rows removed by each cleaning rule, the
+    dropped columns and the final row count, using only the tool outputs.
+  expected_output: >
+    A short report of rows in, rows removed per rule (duplicates, missing
+    required values), dropped columns and rows out, plus the raw file sha256.
+  agent: data_cleaner
+
+eda_task:
+  description: >
+    1. Call eda_summary with clean_csv_path="{clean_csv}" and output_json_path="{summary_json}".
+    2. Call make_charts with clean_csv_path="{clean_csv}" and charts_dir="{charts_dir}".
+    3. Call build_html_report with summary_json_path="{summary_json}",
+       charts_dir="{charts_dir}" and output_html_path="{report_html}".
+    You must call all three tools, in this order; the task is not done until
+    eda_report.html exists. Report the files created and the headline numbers
+    returned by eda_summary.
+  expected_output: >
+    The paths of eda_summary.json, the charts and eda_report.html, with the
+    headline numbers from the eda_summary tool.
+  agent: eda_analyst
+
+insights_task:
+  description: >
+    Call read_eda_summary with summary_json_path="{summary_json}". Using ONLY
+    numbers from that JSON (copied or rounded, never computed), write
+    insights.md in Hebrew for the wine buyer of a retail chain, in plain
+    business language. Country and variety names may stay in English.
+
+    Use exactly these four "##" headings, in this order. Where a template is
+    given, copy it word for word and replace only the <placeholders>. Each
+    placeholder names a JSON field and how to write it: "rounded" means round
+    to a whole number (28.73 -> 29, 88.0 -> 88, 25.0 -> 25); "as is" means
+    copy the value unchanged. Never write a value like 28.73% or 90.0.
+
+    "## באיזה טווח מחיר העלייה בניקוד מאטה?"
+      One sentence saying the score keeps rising with price, then this line:
+      החל מ-$<price_bands.plateau_from_price, rounded>, כל הכפלה של המחיר מוסיפה רק <price_bands.plateau_gain_per_doubling, as is> נקודות ניקוד.
+      Never write "מעל טווח זה" and never say the score stops rising.
+
+    "## אילו מדינות וזנים נותנים ניקוד גבוה במחיר נמוך?"
+      First this definition line:
+      ההגדרה: ניקוד חציוני של <overall_median_points, rounded> ומעלה, ומחיר חציוני של $<overall_median_price, rounded> ומטה, ביחס לכלל היינות.
+      Then the sub-heading "### מדינות" with one bullet per entry in
+      value_countries, and the sub-heading "### זנים" with one bullet per
+      entry in value_varieties. Each bullet:
+      - **<name, as is>**: ניקוד חציוני <median_points, rounded>, מחיר חציוני $<median_price, rounded>
+      Name ONLY entries from value_countries and value_varieties.
+
+    "## היכן הנתונים מוטים?"
+      One or two sentences from country_bias (percentages rounded), then this line:
+      - ערכים חסרים: <missing_pct.region_1, rounded>% מהיינות ללא נתוני אזור, ו-<missing_pct.designation, rounded>% ללא שם הסדרה/היין.
+
+    "## המלצות לקנייה"
+      Exactly 3 "-" bullets. Do not recommend the most expensive wines.
+      The third bullet is this line:
+      - החל מ-$<price_bands.plateau_from_price, rounded>, כל הכפלה של המחיר מוסיפה רק <price_bands.plateau_gain_per_doubling, as is> נקודות ניקוד, ולכן הכסף שווה יותר בטווחי המחיר הנמוכים.
+
+    Hebrew terms (use exactly these, never mix median and mean):
+    points = "ניקוד" (not "דירוג"); median_points = "ניקוד חציוני";
+    mean_points = "ניקוד ממוצע"; median_price = "מחיר חציוני";
+    share_pct = "אחוז מהיינות"; missing_pct = "אחוז ערכים חסרים".
+    Column names: region_1 = "נתוני אזור"; designation = "שם הסדרה/היין";
+    taster_name = "שם הטועם"; vintage = "בציר". Never translate column names
+    literally (not "האזור הראשון", not "עמודת ההגדרה").
+
+    Rounding: write points as whole numbers (90, not 90.0); write percentages
+    as whole numbers (45%, not 45.0% or 45.04%); write prices with "$" and no
+    decimals ($25). The one exception is plateau_gain_per_doubling: copy it as
+    is (for example 0.74).
+
+    Rules: use "-" bullets, not numbered lists. Do not add numbers that are not
+    in the JSON (no differences, ratios or percentages you calculate yourself).
+  expected_output: >
+    A Markdown document in Hebrew with four "##" sections, every number taken
+    from the eda_summary JSON. Output only the Markdown, without code fences.
+  agent: insights_writer
+
+contract_task:
+  description: >
+    1. Call build_contract with clean_csv_path="{clean_csv}", raw_csv_path="{raw_csv}"
+       and output_json_path="{contract_json}".
+    2. Call validate_contract with clean_csv_path="{clean_csv}" and
+       contract_json_path="{contract_json}".
+    Report whether validation passed and list every violation exactly as returned.
+  expected_output: >
+    The contract path, the raw file sha256, the row count, and the validation
+    result (passed or the list of violations).
+  agent: contract_author

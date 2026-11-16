@@ -16,4 +16,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-markers = ["real_data: runs on the real raw CSV in data/raw/ (skipped if missing)"]
+markers = [
+    "real_data: runs on the real raw CSV in data/raw/ (skipped if missing)",
+    "llm: calls the real LLM and costs money; run explicitly with `pytest -m llm` (skipped without OPENAI_API_KEY)",
+]
+addopts = "-m 'not llm'"
