@@ -39,6 +39,14 @@ model:
   selection_metric: cv_mae # pick v1/v2 by mean CV MAE on the training set
   value_top_n: 50
 
+eda:
+  top_n: 15                       # countries / varieties shown by count
+  price_bands: [4, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 500, 3300]   # USD edges, right-inclusive
+  plateau_gain_per_doubling: 1.0  # mean-points gain per price doubling below this = score stops rising
+  vintage_min_count: 50           # vintages with fewer wines are left out of the per-year view
+  chart_size: [9, 5.5]            # inches
+  chart_dpi: 100
+
 llm:
   model: gpt-4o-mini
   temperature: 0
