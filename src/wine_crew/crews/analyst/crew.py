@@ -31,7 +31,10 @@ from crewai import LLM, Agent, Crew, Process, Task  # noqa: E402
 from crewai.project import CrewBase, agent, crew, task  # noqa: E402
 
 from wine_crew.tools import crewai_tools as ct  # noqa: E402
-from wine_crew.tools.eda_tools import insight_number_violations  # noqa: E402
+from wine_crew.tools.eda_tools import (  # noqa: E402
+    insight_number_violations,
+    insight_style_violations,
+)
 
 _FENCE = re.compile(r"^```(?:markdown|md)?\s*\n(.*?)\n```\s*$", re.DOTALL)
 
@@ -61,7 +64,7 @@ def strip_fences(text: str) -> str:
 
 
 def make_insights_guardrail(summary_json: Path):
-    """Guardrail: pass only if every number in the insights appears in eda_summary.json."""
+    """Guardrail: every number must appear in eda_summary.json and the style rules must hold."""
 
     # No annotations here: CrewAI validates the return annotation, and with
     # `from __future__ import annotations` it would be a string and be rejected.
@@ -70,13 +73,13 @@ def make_insights_guardrail(summary_json: Path):
         if not summary_json.exists():
             return False, f"{summary_json.name} not found; call read_eda_summary first."
         summary = json.loads(summary_json.read_text(encoding="utf-8"))
-        bad = insight_number_violations(text, summary)
-        if bad:
-            return False, (
-                "These numbers do not appear in the eda_summary JSON: "
-                + ", ".join(bad)
-                + ". Rewrite the insights using only numbers copied (or rounded) from read_eda_summary."
-            )
+        problems = []
+        bad_numbers = insight_number_violations(text, summary)
+        if bad_numbers:
+            problems.append("these numbers do not appear in the eda_summary JSON: " + ", ".join(bad_numbers))
+        problems += insight_style_violations(text, summary)
+        if problems:
+            return False, "Fix these problems and rewrite the full Markdown:\n- " + "\n- ".join(problems)
         return True, text
 
     return guardrail

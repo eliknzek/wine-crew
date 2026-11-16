@@ -11,6 +11,7 @@ from wine_crew.crews.analyst.crew import (
     make_insights_guardrail,
     strip_fences,
 )
+from wine_crew.tools.eda_tools import INSIGHT_HEADINGS
 
 EXPECTED_TOOLS = {
     "Data Cleaner": {"load_raw", "clean_data"},
@@ -60,14 +61,29 @@ class _Out:
         self.raw = raw
 
 
+def _insights(bias_line: str) -> str:
+    h1, h2, h3, h4 = INSIGHT_HEADINGS
+    return f"{h1}\n- מאטה.\n\n{h2}\n- Austria.\n\n{h3}\n{bias_line}\n\n{h4}\n- המלצה."
+
+
 def test_guardrail_accepts_summary_numbers_and_rejects_invented_ones(tmp_path):
     summary = tmp_path / "eda_summary.json"
-    summary.write_text(json.dumps({"country_bias": {"top_country_share_pct": 45.04}, "top_n": 15}))
+    summary.write_text(json.dumps({"country_bias": {"top_country_share_pct": 45.04}, "top_n": 15,
+                                   "value_countries": [{"name": "Austria"}]}))
     guardrail = make_insights_guardrail(summary)
-    ok, text = guardrail(_Out("```markdown\n## הטיה\n- 45% מארה\"ב\n```"))
-    assert ok and text == "## הטיה\n- 45% מארה\"ב"
-    ok, message = guardrail(_Out("- 45% מארה\"ב ו-17% מצרפת"))
+    good = _insights("- 45% מארה\"ב")
+    ok, text = guardrail(_Out(f"```markdown\n{good}\n```"))
+    assert ok and text == good
+    ok, message = guardrail(_Out(_insights("- 45% מארה\"ב ו-17% מצרפת")))
     assert not ok and "17" in message
+
+
+def test_guardrail_rejects_style_problems(tmp_path):
+    summary = tmp_path / "eda_summary.json"
+    summary.write_text(json.dumps({"country_bias": {"top_country_share_pct": 45.04}}))
+    ok, message = make_insights_guardrail(summary)(_Out("- 45.04% מארה\"ב"))
+    assert not ok
+    assert "missing heading" in message and "45.04%" in message
 
 
 def test_every_task_has_a_guardrail(analyst):

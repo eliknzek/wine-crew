@@ -32,20 +32,34 @@ insights_task:
     insights.md in Hebrew for the wine buyer of a retail chain, in plain
     business language. Country and variety names may stay in English.
 
-    Answer these three questions, each under its own "##" heading:
-    1. In which price range does the score stop rising? Use price_bands
-       (gain_per_price_doubling and plateau_starts_at_band).
-    2. Which countries and varieties give a high score at a low price? Use
-       value_countries, value_varieties, by_country and by_variety.
-    3. Where is the data biased? Use country_bias and missing_pct.
-    End with a short "## המלצות לקנייה" section of 3 bullet points.
+    Use exactly these four "##" headings, in this order:
+    "## באיזה טווח מחיר העלייה בניקוד מאטה?"
+      Use price_bands (gain_per_price_doubling, plateau_starts_at_band). The
+      score keeps rising with price; explain from which band each price
+      doubling adds little score. Never say the score stops rising.
+    "## אילו מדינות וזנים נותנים ניקוד גבוה במחיר נמוך?"
+      Name ONLY the countries in value_countries and the varieties in
+      value_varieties, with their median_points and median_price. Do not pick
+      other countries or varieties from by_country or by_variety.
+    "## היכן הנתונים מוטים?"
+      Use country_bias and missing_pct.
+    "## המלצות לקנייה"
+      Exactly 3 "-" bullets. The third bullet explains that above the
+      plateau band each price doubling adds little score, so the buyer's
+      money is worth more in the lower price bands. Do not recommend the most
+      expensive wines.
 
     Hebrew terms (use exactly these, never mix median and mean):
     points = "ניקוד" (not "דירוג"); median_points = "ניקוד חציוני";
     mean_points = "ניקוד ממוצע"; median_price = "מחיר חציוני";
     share_pct = "אחוז מהיינות"; missing_pct = "אחוז ערכים חסרים".
-    The price plateau is where the gain per price doubling drops, not where
-    the score stops completely; say so. Write prices with "$".
+    Column names: region_1 = "אזור"; designation = "שם הסדרה/היין";
+    taster_name = "שם הטועם"; vintage = "בציר". Never translate column names
+    literally (not "האזור הראשון", not "הגדרה").
+
+    Rounding: write points as whole numbers (90, not 90.0); write percentages
+    as whole numbers (45%, not 45.0% or 45.04%); write prices with "$" and no
+    decimals ($25).
 
     Rules: use "-" bullets, not numbered lists. Do not add numbers that are not
     in the JSON (no differences, ratios or percentages you calculate yourself).

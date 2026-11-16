@@ -222,6 +222,69 @@ def insight_number_violations(text: str, summary: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(violations))
 
 
+INSIGHT_HEADINGS = [
+    "## באיזה טווח מחיר העלייה בניקוד מאטה?",
+    "## אילו מדינות וזנים נותנים ניקוד גבוה במחיר נמוך?",
+    "## היכן הנתונים מוטים?",
+    "## המלצות לקנייה",
+]
+FORBIDDEN_PHRASES = {
+    "מפסיק לעלות": "the score keeps rising; say the gain slows ('מאטה')",
+    "האזור הראשון": "region_1 is 'אזור'",
+    "קטגוריית ההגדרה": "designation is 'שם הסדרה/היין'",
+    "דירוג": "points is 'ניקוד'",
+}
+_TRAILING_ZERO = re.compile(r"(?<![\d.])\d+\.0(?!\d)")
+_LONG_PERCENT = re.compile(r"(?<![\d.])\d+\.\d{2,}\s*%")
+
+
+def _section(text: str, heading: str) -> str:
+    start = text.find(heading)
+    if start < 0:
+        return ""
+    rest = text[start + len(heading):]
+    nxt = rest.find("\n## ")
+    return rest if nxt < 0 else rest[:nxt]
+
+
+def _names_in(text: str, names: list[str]) -> list[str]:
+    """Names mentioned in text, longest first so "Red Blend" is not found inside "Bordeaux-style Red Blend"."""
+    found = []
+    for name in sorted(set(names), key=len, reverse=True):
+        pattern = re.compile(rf"(?<!\w){re.escape(name)}(?!\w)")
+        if pattern.search(text):
+            found.append(name)
+            text = pattern.sub(" ", text)
+    return found
+
+
+def insight_style_violations(text: str, summary: dict[str, Any]) -> list[str]:
+    """Deterministic style rules for insights.md: headings, terms, rounding, value-only picks."""
+    out: list[str] = []
+    positions = [text.find(h) for h in INSIGHT_HEADINGS]
+    for heading, pos in zip(INSIGHT_HEADINGS, positions):
+        if pos < 0:
+            out.append(f"missing heading: {heading}")
+    found = [p for p in positions if p >= 0]
+    if found != sorted(found):
+        out.append("headings are not in the required order")
+    for phrase, why in FORBIDDEN_PHRASES.items():
+        if phrase in text:
+            out.append(f"do not write '{phrase}': {why}")
+    for token in dict.fromkeys(_TRAILING_ZERO.findall(text)):
+        out.append(f"write {token} as a whole number ({token[:-2]})")
+    for token in dict.fromkeys(_LONG_PERCENT.findall(text)):
+        out.append(f"round the percentage {token.strip()} to a whole number")
+
+    value_section = _section(text, INSIGHT_HEADINGS[1])
+    allowed = {r["name"] for r in summary.get("value_countries", []) + summary.get("value_varieties", [])}
+    candidates = [r["name"] for r in summary.get("by_country", []) + summary.get("by_variety", [])]
+    for name in _names_in(value_section, candidates + sorted(allowed)):
+        if name not in allowed:
+            out.append(f"{name} is not in value_countries or value_varieties; name only those")
+    return out
+
+
 # --------------------------------------------------------------------------- charts
 
 
