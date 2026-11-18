@@ -252,3 +252,34 @@ def rtl_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def is_text_column(series: pd.Series) -> bool:
     return not (pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series))
+
+
+# --------------------------------------------------------------------------- Hebrew country names (display only)
+
+# Every country in the cleaned data. The data, the filters and the model keep the English
+# name; this is only how a country is shown.
+COUNTRY_HE = {
+    "Argentina": "ארגנטינה", "Armenia": "ארמניה", "Australia": "אוסטרליה", "Austria": "אוסטריה",
+    "Bosnia and Herzegovina": "בוסניה והרצגובינה", "Brazil": "ברזיל", "Bulgaria": "בולגריה",
+    "Canada": "קנדה", "Chile": "צ'ילה", "China": "סין", "Croatia": "קרואטיה", "Cyprus": "קפריסין",
+    "Czech Republic": "צ'כיה", "England": "אנגליה", "France": "צרפת", "Georgia": "גאורגיה",
+    "Germany": "גרמניה", "Greece": "יוון", "Hungary": "הונגריה", "India": "הודו", "Israel": "ישראל",
+    "Italy": "איטליה", "Lebanon": "לבנון", "Luxembourg": "לוקסמבורג", "Macedonia": "מקדוניה",
+    "Mexico": "מקסיקו", "Moldova": "מולדובה", "Morocco": "מרוקו", "New Zealand": "ניו זילנד",
+    "Peru": "פרו", "Portugal": "פורטוגל", "Romania": "רומניה", "Serbia": "סרביה",
+    "Slovakia": "סלובקיה", "Slovenia": "סלובניה", "South Africa": "דרום אפריקה", "Spain": "ספרד",
+    "Switzerland": "שווייץ", "Turkey": "טורקיה", "US": "ארצות הברית", "Ukraine": "אוקראינה",
+    "Uruguay": "אורוגוואי",
+}
+
+
+def country_label(country: Any) -> str:
+    """'ישראל (Israel)'; a country without a translation stays in English."""
+    name = str(country)
+    hebrew = COUNTRY_HE.get(name)
+    return f"{hebrew} ({name})" if hebrew else name
+
+
+def sort_countries(countries: list[str]) -> list[str]:
+    """English names ordered by their Hebrew name (alphabetical); untranslated ones last, A-Z."""
+    return sorted(countries, key=lambda c: (c not in COUNTRY_HE, COUNTRY_HE.get(c, c)))

@@ -69,7 +69,7 @@ def test_value_filter(app):
     app.multiselect(key="value_countries").select("Italy").run()
     assert not app.exception
     table = next(d for d in app.dataframe if "value_score" in d.value.columns)
-    assert len(table.value) == 50 and set(table.value["country"]) == {"Italy"}
+    assert len(table.value) == 50 and set(table.value["country"]) == {"איטליה (Italy)"}
     assert app.number_input(key="value_price_max").value == 3300.0      # max price in the file
     assert app.multiselect(key="value_varieties").placeholder.startswith("כל הזנים")
 
@@ -107,3 +107,19 @@ def test_text_columns_are_right_aligned(app):
         for col in d.value.columns:
             if ad.is_text_column(d.value[col]):
                 assert config[col]["alignment"] == "right", col
+
+
+def test_menus_are_sorted_and_send_english_names(app):
+    countries = app.multiselect(key="value_countries").options
+    hebrew_part = [c.split(" (")[0] for c in countries]
+    assert hebrew_part == sorted(hebrew_part)
+    assert "ישראל (Israel)" in countries
+    form = app.selectbox(key="form_country")
+    assert [o.split(" (")[0] for o in form.options] == sorted(o.split(" (")[0] for o in form.options)
+    assert form.value == "US"                                   # the model still gets the English name
+    for key in ("form_variety", "form_province"):
+        options = app.selectbox(key=key).options
+        assert options == sorted(options)
+    regions = app.selectbox(key="form_region").options
+    assert regions[0] == ad.UNKNOWN and regions[1:] == sorted(regions[1:])
+    assert app.multiselect(key="value_varieties").options == sorted(app.multiselect(key="value_varieties").options)

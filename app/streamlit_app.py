@@ -176,10 +176,11 @@ with value_tab:
     else:
         st.markdown("ציון שווי = ניקוד בפועל פחות הניקוד שהמודל חזה לפי המחיר, המקור, הזן והבציר. "
                     "התחזית לכל יין מגיעה ממודל שלא ראה אותו באימון (out-of-fold).")
-        countries = ranking["country"].value_counts().index.tolist()
-        varieties = ranking["variety"].value_counts().index.tolist()
+        countries = ad.sort_countries(ranking["country"].dropna().unique().tolist())
+        varieties = sorted(ranking["variety"].dropna().unique().tolist())
         f1, f2 = st.columns(2)
         chosen_countries = f1.multiselect("מדינה", countries, key="value_countries",
+                                          format_func=ad.country_label,
                                           placeholder="כל המדינות (אפשר לבחור כמה)")
         chosen_varieties = f2.multiselect("זן", varieties, key="value_varieties",
                                           placeholder="כל הזנים (אפשר לבחור כמה)")
@@ -191,7 +192,8 @@ with value_tab:
         top = p3.slider("מספר יינות", 10, 200, 50, step=10, key="value_top")
         result = ad.filter_ranking(ranking, chosen_countries, chosen_varieties, price_min, price_max, top)
         st.caption(f"{len(result)} יינות מוצגים")
-        shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))))
+        shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
+                              country=result["country"].map(ad.country_label))
         show_table_rtl(
             shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
                    "predicted", "value_score"]],
@@ -226,14 +228,14 @@ with predict_tab:
                 return options.index(top) if top in options else 0
 
             c1, c2 = st.columns(2)
-            country_opts = sorted(opts["country"])
+            country_opts = ad.sort_countries(opts["country"])
             country = c1.selectbox("מדינה", country_opts, index=_index(country_opts, "country"),
-                                   key="form_country")
+                                   format_func=ad.country_label, key="form_country")
             province_opts = provinces.get(country) or sorted(opts["province"])
             province = c2.selectbox("מחוז", province_opts,
                                     index=_index(province_opts, "province", {"country": country}),
                                     key="form_province")
-            region_opts = [ad.UNKNOWN] + regions.get(province, [])
+            region_opts = [ad.UNKNOWN] + sorted(regions.get(province, []))  # "לא ידוע" stays first
             region = c1.selectbox("אזור (region_1)", region_opts, key="form_region")
             variety_opts = sorted(opts["variety"])
             variety = c2.selectbox("זן", variety_opts, index=_index(variety_opts, "variety"),

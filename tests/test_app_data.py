@@ -152,3 +152,18 @@ def test_rtl_columns_reverses_column_order_only():
 def test_is_text_column():
     df = pd.DataFrame({"a": ["x"], "b": [1.5], "c": [3]})
     assert [ad.is_text_column(df[c]) for c in df] == [True, False, False]
+
+
+def test_every_country_in_the_data_has_a_hebrew_name(ranking, model):
+    in_data = set(ranking["country"].dropna()) | set(ad.model_options(model)["country"])
+    assert in_data - set(ad.COUNTRY_HE) == set()
+    assert ad.country_label("Israel") == "ישראל (Israel)"
+    assert ad.country_label("US") == "ארצות הברית (US)"
+    assert ad.country_label("Atlantis") == "Atlantis"          # no translation: English, no error
+
+
+def test_countries_sorted_by_hebrew_name():
+    ordered = ad.sort_countries(["US", "Israel", "Atlantis", "France", "Argentina", "Italy"])
+    assert ordered == ["Italy", "Argentina", "US", "Israel", "France", "Atlantis"]
+    hebrew = [ad.COUNTRY_HE[c] for c in ad.sort_countries(list(ad.COUNTRY_HE))]
+    assert hebrew == sorted(hebrew)
