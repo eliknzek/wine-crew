@@ -64,8 +64,10 @@ class RunLog:
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
         self.handler = logging.FileHandler(path, encoding="utf-8")
-        self.handler.setFormatter(logging.Formatter(
-            f"%(asctime)s %(levelname)s [{run_id}] %(message)s", "%Y-%m-%dT%H:%M:%S"))
+        formatter = logging.Formatter(
+            f"%(asctime)sZ %(levelname)s [{run_id}] %(message)s", "%Y-%m-%dT%H:%M:%S")
+        formatter.converter = time.gmtime  # UTC, like the run id and run_summary.json
+        self.handler.setFormatter(formatter)
         self.logger.addHandler(self.handler)
         self.current_step: str | None = None
 

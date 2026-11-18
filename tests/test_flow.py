@@ -134,6 +134,7 @@ def test_passing_run(flow_config, capsys):
     assert "crew1 rows: in=600 out=" in log and "crew2 rows: in=" in log and "train rows: train=" in log
     assert "crew1 tokens: total=1500" in log and "crew2 tokens:" in log and "cost=$" in log
     assert s["raw_sha256"] in log
+    assert re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ INFO \[" + re.escape(s["run_id"]) + "]", log)
 
 
 def test_crew_cost():
