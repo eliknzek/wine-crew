@@ -162,6 +162,7 @@ def test_train_models_writes_model_metrics_and_report(model_inputs, model_config
     assert len(ranking) == result["ranked_wines"] == len(model_df)
     assert ranking["rank"].tolist() == list(range(1, len(model_df) + 1))
     assert ranking["value_score"].is_monotonic_decreasing
+    assert ".0" not in (d / "value_ranking.csv").read_text().splitlines()[1].split(",")[6]  # vintage as int
     with pytest.raises(ValueError, match="inside artifacts/"):
         ct.run_train_models(model_config, model_inputs["clean"], model_inputs["contract"],
                             "src/model.pkl", str(d / "m.json"), str(d / "r.md"), str(d / "v.csv"))

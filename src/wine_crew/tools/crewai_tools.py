@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -214,6 +215,7 @@ def run_train_models(
     report_out.write_text(evaluation_report_md(metrics, ranking.head(config["model"]["value_top_n"])),
                           encoding="utf-8")
     full = ranking.assign(rank=range(1, len(ranking) + 1),
+                          vintage=pd.to_numeric(ranking["vintage"]).astype("Int64"),
                           predicted=ranking["predicted"].round(4), value_score=ranking["value_score"].round(4))
     full[VALUE_RANKING_COLUMNS].to_csv(ranking_out, index=False)
     return {
