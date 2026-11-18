@@ -61,6 +61,10 @@ eda:
 llm:
   model: gpt-4o-mini
   temperature: 0
+  price_per_million:            # USD, gpt-4o-mini list price; used for the run cost in the log
+    input: 0.15
+    cached_input: 0.075
+    output: 0.60
 
 checks:
   row_count:
