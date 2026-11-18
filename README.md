@@ -36,13 +36,28 @@ pytest
 
 כל ריצה כותבת לוג ל-`logs/run_<timestamp>.log` (מזהה ריצה, זמנים, שורות, תוצאת כל שער, טוקנים ועלות) וסיכום ל-`artifacts/run_summary.json`.
 
-## אפליקציה
+## הרצת האפליקציה
+
+מהשורש של ה-repo:
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-אפליקציה בעברית עם חמישה מסכים: סקירה, ניתוח, מודל, מציאת שווים למחיר וחיזוי. היא רק קוראת את התוצרים ב-`artifacts/` ואת `model.pkl`. היא לא מריצה את ה-Flow ולא צריכה מפתח API.
+אפליקציה בעברית עם חמישה מסכים: סקירה, ניתוח, מודל, מציאת שווים למחיר וחיזוי. היא רק קוראת את התוצרים ב-`artifacts/` ואת `model.pkl`. היא לא מריצה את ה-Flow ולא צריכה מפתח API. כדי להריץ רק את האפליקציה, בלי crewai, מספיק `pip install -r app/requirements.txt`.
+
+## פריסה
+
+האפליקציה מיועדת ל-Streamlit Community Cloud:
+
+- **Entrypoint:** `app/streamlit_app.py`.
+- **תלויות:** `app/requirements.txt`, עם גרסאות זהות ל-`requirements.txt` הראשי ובלי crewai. Cloud קורא אותו כי הוא נמצא ליד ה-entrypoint.
+- **Python:** 3.13. בוחרים אותו ב-Advanced settings, כי ברירת המחדל שם היא 3.12.
+- **חבילת `wine_crew`:** לא מותקנת. האפליקציה מוסיפה את `src/` ל-`sys.path` בעצמה.
+- **סודות:** לא נדרשים.
+- **עיצוב:** הפונט (Rubik) מוגדר ב-`.streamlit/config.toml`.
+
+קישור לאפליקציה: _(יתווסף אחרי הפריסה)_
 
 ## תוצרים ב-Git
 
