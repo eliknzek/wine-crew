@@ -1,0 +1,669 @@
+{
+  "row_count": 111537,
+  "top_n": 15,
+  "points": {
+    "count": 111537,
+    "mean": 88.4138,
+    "std": 3.0992,
+    "min": 80.0,
+    "p05": 83.0,
+    "p25": 86.0,
+    "median": 88.0,
+    "p75": 91.0,
+    "p95": 93.0,
+    "max": 100.0
+  },
+  "price": {
+    "count": 111537,
+    "mean": 35.6263,
+    "std": 42.1131,
+    "min": 4.0,
+    "p05": 10.0,
+    "p25": 17.0,
+    "median": 25.0,
+    "p75": 42.0,
+    "p95": 85.0,
+    "max": 3300.0
+  },
+  "corr_points_log_price": 0.6177,
+  "price_bands": {
+    "bands": [
+      {
+        "band": "$4-$10",
+        "low": 4.0,
+        "high": 10.0,
+        "geo_mid": 6.32,
+        "count": 5914,
+        "mean_points": 84.97,
+        "median_points": 85.0,
+        "gain_vs_previous": null,
+        "gain_per_price_doubling": null
+      },
+      {
+        "band": "$10-$15",
+        "low": 10.0,
+        "high": 15.0,
+        "geo_mid": 12.25,
+        "count": 17346,
+        "mean_points": 86.14,
+        "median_points": 86.0,
+        "gain_vs_previous": 1.17,
+        "gain_per_price_doubling": 1.23
+      },
+      {
+        "band": "$15-$20",
+        "low": 15.0,
+        "high": 20.0,
+        "geo_mid": 17.32,
+        "count": 19468,
+        "mean_points": 87.31,
+        "median_points": 87.0,
+        "gain_vs_previous": 1.17,
+        "gain_per_price_doubling": 2.34
+      },
+      {
+        "band": "$20-$25",
+        "low": 20.0,
+        "high": 25.0,
+        "geo_mid": 22.36,
+        "count": 13668,
+        "mean_points": 88.02,
+        "median_points": 88.0,
+        "gain_vs_previous": 0.71,
+        "gain_per_price_doubling": 1.93
+      },
+      {
+        "band": "$25-$30",
+        "low": 25.0,
+        "high": 30.0,
+        "geo_mid": 27.39,
+        "count": 11138,
+        "mean_points": 88.49,
+        "median_points": 89.0,
+        "gain_vs_previous": 0.47,
+        "gain_per_price_doubling": 1.61
+      },
+      {
+        "band": "$30-$40",
+        "low": 30.0,
+        "high": 40.0,
+        "geo_mid": 34.64,
+        "count": 14854,
+        "mean_points": 89.24,
+        "median_points": 90.0,
+        "gain_vs_previous": 0.75,
+        "gain_per_price_doubling": 2.21
+      },
+      {
+        "band": "$40-$50",
+        "low": 40.0,
+        "high": 50.0,
+        "geo_mid": 44.72,
+        "count": 10669,
+        "mean_points": 90.11,
+        "median_points": 90.0,
+        "gain_vs_previous": 0.87,
+        "gain_per_price_doubling": 2.36
+      },
+      {
+        "band": "$50-$75",
+        "low": 50.0,
+        "high": 75.0,
+        "geo_mid": 61.24,
+        "count": 11292,
+        "mean_points": 90.89,
+        "median_points": 91.0,
+        "gain_vs_previous": 0.78,
+        "gain_per_price_doubling": 1.72
+      },
+      {
+        "band": "$75-$100",
+        "low": 75.0,
+        "high": 100.0,
+        "geo_mid": 86.6,
+        "count": 3959,
+        "mean_points": 91.69,
+        "median_points": 92.0,
+        "gain_vs_previous": 0.8,
+        "gain_per_price_doubling": 1.6
+      },
+      {
+        "band": "$100-$150",
+        "low": 100.0,
+        "high": 150.0,
+        "geo_mid": 122.47,
+        "count": 2037,
+        "mean_points": 92.32,
+        "median_points": 93.0,
+        "gain_vs_previous": 0.63,
+        "gain_per_price_doubling": 1.26
+      },
+      {
+        "band": "$150-$200",
+        "low": 150.0,
+        "high": 200.0,
+        "geo_mid": 173.21,
+        "count": 527,
+        "mean_points": 93.14,
+        "median_points": 94.0,
+        "gain_vs_previous": 0.82,
+        "gain_per_price_doubling": 1.64
+      },
+      {
+        "band": "$200-$500",
+        "low": 200.0,
+        "high": 500.0,
+        "geo_mid": 316.23,
+        "count": 574,
+        "mean_points": 94.18,
+        "median_points": 94.0,
+        "gain_vs_previous": 1.04,
+        "gain_per_price_doubling": 1.2
+      },
+      {
+        "band": "$500-$3300",
+        "low": 500.0,
+        "high": 3300.0,
+        "geo_mid": 1284.52,
+        "count": 91,
+        "mean_points": 95.68,
+        "median_points": 96.0,
+        "gain_vs_previous": 1.5,
+        "gain_per_price_doubling": 0.74
+      }
+    ],
+    "plateau_gain_per_doubling_threshold": 1.0,
+    "plateau_starts_at_band": "$500-$3300",
+    "plateau_from_price": 500.0,
+    "plateau_gain_per_doubling": 0.74
+  },
+  "by_country": [
+    {
+      "name": "US",
+      "count": 50238,
+      "share_pct": 45.04,
+      "median_points": 88.0,
+      "mean_points": 88.56,
+      "median_price": 30.0
+    },
+    {
+      "name": "France",
+      "count": 16286,
+      "share_pct": 14.6,
+      "median_points": 89.0,
+      "mean_points": 88.75,
+      "median_price": 25.0
+    },
+    {
+      "name": "Italy",
+      "count": 15506,
+      "share_pct": 13.9,
+      "median_points": 88.0,
+      "mean_points": 88.63,
+      "median_price": 28.0
+    },
+    {
+      "name": "Spain",
+      "count": 6049,
+      "share_pct": 5.42,
+      "median_points": 87.0,
+      "mean_points": 87.24,
+      "median_price": 18.0
+    },
+    {
+      "name": "Portugal",
+      "count": 4502,
+      "share_pct": 4.04,
+      "median_points": 88.0,
+      "mean_points": 88.33,
+      "median_price": 17.0
+    },
+    {
+      "name": "Chile",
+      "count": 4129,
+      "share_pct": 3.7,
+      "median_points": 86.0,
+      "mean_points": 86.46,
+      "median_price": 15.0
+    },
+    {
+      "name": "Argentina",
+      "count": 3501,
+      "share_pct": 3.14,
+      "median_points": 86.0,
+      "mean_points": 86.65,
+      "median_price": 17.0
+    },
+    {
+      "name": "Austria",
+      "count": 2536,
+      "share_pct": 2.27,
+      "median_points": 90.0,
+      "mean_points": 90.22,
+      "median_price": 25.0
+    },
+    {
+      "name": "Australia",
+      "count": 2169,
+      "share_pct": 1.94,
+      "median_points": 89.0,
+      "mean_points": 88.57,
+      "median_price": 21.0
+    },
+    {
+      "name": "Germany",
+      "count": 1951,
+      "share_pct": 1.75,
+      "median_points": 90.0,
+      "mean_points": 89.88,
+      "median_price": 27.0
+    },
+    {
+      "name": "New Zealand",
+      "count": 1240,
+      "share_pct": 1.11,
+      "median_points": 88.0,
+      "mean_points": 88.3,
+      "median_price": 20.0
+    },
+    {
+      "name": "South Africa",
+      "count": 1195,
+      "share_pct": 1.07,
+      "median_points": 87.0,
+      "mean_points": 87.79,
+      "median_price": 18.0
+    },
+    {
+      "name": "Israel",
+      "count": 453,
+      "share_pct": 0.41,
+      "median_points": 89.0,
+      "mean_points": 88.47,
+      "median_price": 25.0
+    },
+    {
+      "name": "Greece",
+      "count": 427,
+      "share_pct": 0.38,
+      "median_points": 87.0,
+      "mean_points": 87.24,
+      "median_price": 19.0
+    },
+    {
+      "name": "Canada",
+      "count": 224,
+      "share_pct": 0.2,
+      "median_points": 90.0,
+      "mean_points": 89.31,
+      "median_price": 30.0
+    }
+  ],
+  "by_variety": [
+    {
+      "name": "Pinot Noir",
+      "count": 11833,
+      "share_pct": 10.61,
+      "median_points": 90.0,
+      "mean_points": 89.43,
+      "median_price": 42.0
+    },
+    {
+      "name": "Chardonnay",
+      "count": 10235,
+      "share_pct": 9.18,
+      "median_points": 88.0,
+      "mean_points": 88.28,
+      "median_price": 26.0
+    },
+    {
+      "name": "Cabernet Sauvignon",
+      "count": 8761,
+      "share_pct": 7.85,
+      "median_points": 88.0,
+      "mean_points": 88.62,
+      "median_price": 38.0
+    },
+    {
+      "name": "Red Blend",
+      "count": 7800,
+      "share_pct": 6.99,
+      "median_points": 88.0,
+      "mean_points": 88.37,
+      "median_price": 28.0
+    },
+    {
+      "name": "Bordeaux-style Red Blend",
+      "count": 4958,
+      "share_pct": 4.45,
+      "median_points": 89.0,
+      "mean_points": 88.81,
+      "median_price": 30.0
+    },
+    {
+      "name": "Riesling",
+      "count": 4571,
+      "share_pct": 4.1,
+      "median_points": 90.0,
+      "mean_points": 89.47,
+      "median_price": 22.0
+    },
+    {
+      "name": "Sauvignon Blanc",
+      "count": 4400,
+      "share_pct": 3.94,
+      "median_points": 87.0,
+      "mean_points": 87.36,
+      "median_price": 18.0
+    },
+    {
+      "name": "Syrah",
+      "count": 3778,
+      "share_pct": 3.39,
+      "median_points": 90.0,
+      "mean_points": 89.31,
+      "median_price": 35.0
+    },
+    {
+      "name": "Rosé",
+      "count": 2950,
+      "share_pct": 2.64,
+      "median_points": 87.0,
+      "mean_points": 86.8,
+      "median_price": 16.0
+    },
+    {
+      "name": "Merlot",
+      "count": 2855,
+      "share_pct": 2.56,
+      "median_points": 87.0,
+      "mean_points": 87.15,
+      "median_price": 24.0
+    },
+    {
+      "name": "Zinfandel",
+      "count": 2524,
+      "share_pct": 2.26,
+      "median_points": 88.0,
+      "mean_points": 87.79,
+      "median_price": 28.0
+    },
+    {
+      "name": "Malbec",
+      "count": 2391,
+      "share_pct": 2.14,
+      "median_points": 88.0,
+      "mean_points": 87.95,
+      "median_price": 22.0
+    },
+    {
+      "name": "Sangiovese",
+      "count": 2163,
+      "share_pct": 1.94,
+      "median_points": 88.0,
+      "mean_points": 88.61,
+      "median_price": 32.0
+    },
+    {
+      "name": "Nebbiolo",
+      "count": 2159,
+      "share_pct": 1.94,
+      "median_points": 90.0,
+      "mean_points": 90.4,
+      "median_price": 57.0
+    },
+    {
+      "name": "Portuguese Red",
+      "count": 2028,
+      "share_pct": 1.82,
+      "median_points": 89.0,
+      "mean_points": 88.9,
+      "median_price": 17.0
+    }
+  ],
+  "value_countries": [
+    {
+      "name": "Austria",
+      "count": 2536,
+      "share_pct": 2.27,
+      "median_points": 90.0,
+      "mean_points": 90.22,
+      "median_price": 25.0
+    },
+    {
+      "name": "Australia",
+      "count": 2169,
+      "share_pct": 1.94,
+      "median_points": 89.0,
+      "mean_points": 88.57,
+      "median_price": 21.0
+    },
+    {
+      "name": "France",
+      "count": 16286,
+      "share_pct": 14.6,
+      "median_points": 89.0,
+      "mean_points": 88.75,
+      "median_price": 25.0
+    },
+    {
+      "name": "Israel",
+      "count": 453,
+      "share_pct": 0.41,
+      "median_points": 89.0,
+      "mean_points": 88.47,
+      "median_price": 25.0
+    },
+    {
+      "name": "Portugal",
+      "count": 4502,
+      "share_pct": 4.04,
+      "median_points": 88.0,
+      "mean_points": 88.33,
+      "median_price": 17.0
+    },
+    {
+      "name": "New Zealand",
+      "count": 1240,
+      "share_pct": 1.11,
+      "median_points": 88.0,
+      "mean_points": 88.3,
+      "median_price": 20.0
+    }
+  ],
+  "value_varieties": [
+    {
+      "name": "Riesling",
+      "count": 4571,
+      "share_pct": 4.1,
+      "median_points": 90.0,
+      "mean_points": 89.47,
+      "median_price": 22.0
+    },
+    {
+      "name": "Portuguese Red",
+      "count": 2028,
+      "share_pct": 1.82,
+      "median_points": 89.0,
+      "mean_points": 88.9,
+      "median_price": 17.0
+    },
+    {
+      "name": "Malbec",
+      "count": 2391,
+      "share_pct": 2.14,
+      "median_points": 88.0,
+      "mean_points": 87.95,
+      "median_price": 22.0
+    }
+  ],
+  "overall_median_points": 88.0,
+  "overall_median_price": 25.0,
+  "by_vintage": [
+    {
+      "vintage": 1996,
+      "count": 64,
+      "mean_points": 88.28,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 1997,
+      "count": 296,
+      "mean_points": 89.07,
+      "median_points": 90.0
+    },
+    {
+      "vintage": 1998,
+      "count": 540,
+      "mean_points": 87.45,
+      "median_points": 87.0
+    },
+    {
+      "vintage": 1999,
+      "count": 616,
+      "mean_points": 87.56,
+      "median_points": 87.0
+    },
+    {
+      "vintage": 2000,
+      "count": 729,
+      "mean_points": 87.29,
+      "median_points": 87.0
+    },
+    {
+      "vintage": 2001,
+      "count": 661,
+      "mean_points": 87.37,
+      "median_points": 87.0
+    },
+    {
+      "vintage": 2002,
+      "count": 326,
+      "mean_points": 87.6,
+      "median_points": 87.0
+    },
+    {
+      "vintage": 2003,
+      "count": 478,
+      "mean_points": 88.41,
+      "median_points": 89.0
+    },
+    {
+      "vintage": 2004,
+      "count": 1547,
+      "mean_points": 88.7,
+      "median_points": 89.0
+    },
+    {
+      "vintage": 2005,
+      "count": 3179,
+      "mean_points": 88.24,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2006,
+      "count": 4989,
+      "mean_points": 88.08,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2007,
+      "count": 6202,
+      "mean_points": 88.09,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2008,
+      "count": 6358,
+      "mean_points": 88.13,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2009,
+      "count": 8497,
+      "mean_points": 88.29,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2010,
+      "count": 10295,
+      "mean_points": 88.2,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2011,
+      "count": 10527,
+      "mean_points": 88.23,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2012,
+      "count": 13421,
+      "mean_points": 88.76,
+      "median_points": 89.0
+    },
+    {
+      "vintage": 2013,
+      "count": 13703,
+      "mean_points": 88.97,
+      "median_points": 89.0
+    },
+    {
+      "vintage": 2014,
+      "count": 13361,
+      "mean_points": 88.91,
+      "median_points": 89.0
+    },
+    {
+      "vintage": 2015,
+      "count": 8581,
+      "mean_points": 88.51,
+      "median_points": 88.0
+    },
+    {
+      "vintage": 2016,
+      "count": 3171,
+      "mean_points": 87.62,
+      "median_points": 88.0
+    }
+  ],
+  "vintage_min_count": 50,
+  "missing_pct": {
+    "points": 0.0,
+    "price": 0.0,
+    "log_price": 0.0,
+    "vintage": 3.46,
+    "country": 0.0,
+    "province": 0.0,
+    "variety": 0.0,
+    "region_1": 16.1,
+    "winery": 0.0,
+    "title": 0.0,
+    "designation": 28.73,
+    "description": 0.0,
+    "taster_name": 20.86
+  },
+  "country_bias": {
+    "n_countries": 42,
+    "top_country": "US",
+    "top_country_share_pct": 45.04,
+    "top3_share_pct": 73.55,
+    "shares_pct": {
+      "US": 45.04,
+      "France": 14.6,
+      "Italy": 13.9,
+      "Spain": 5.42,
+      "Portugal": 4.04,
+      "Chile": 3.7,
+      "Argentina": 3.14,
+      "Austria": 2.27,
+      "Australia": 1.94,
+      "Germany": 1.75,
+      "New Zealand": 1.11,
+      "South Africa": 1.07,
+      "Israel": 0.41,
+      "Greece": 0.38,
+      "Canada": 0.2
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 מערכת CrewAI שחוזה את ניקוד היין (`points`) לפי מחיר, מקור, זן ובציר, ומאתרת יינות שקיבלו ניקוד גבוה ממה שהמחיר שלהם צפוי לתת. Flow אחד מריץ שני crews בשרשרת, Data Analyst ואחריו Data Scientist, ויש בדיקות דטרמיניסטיות בין השלבים. האפיון המלא נמצא ב-[`docs/spec.md`](docs/spec.md), וחוזה הנתונים ב-[`docs/dataset_contract.json`](docs/dataset_contract.json).
 
-> הפרויקט בשלב 1 (הקמת ה-repo). המודולים ב-`src/` הם עדיין שלד.
+> שלבים 1–5 הושלמו: הכלים, שני ה-crews וה-Flow עם השערים. אפליקציית Streamlit עוד לא נבנתה.
 
 ## התקנה
 
@@ -30,9 +30,15 @@ python scripts/download_data.py --force  # מוריד מחדש
 ## הרצה ובדיקות
 
 ```bash
-python -m wine_crew.main   # מריץ את ה-Flow (ימומש בשלב 5)
+python -m wine_crew.main   # מריץ את כל ה-Flow; exit code 1 אם שער עצר את הריצה
 pytest
 ```
+
+כל ריצה כותבת לוג ל-`logs/run_<timestamp>.log` (מזהה ריצה, זמנים, שורות, תוצאת כל שער, טוקנים ועלות) וסיכום ל-`artifacts/run_summary.json`.
+
+## תוצרים ב-Git
+
+התוצרים ב-`artifacts/` נכנסים ל-Git רק בריצות מלאות מכוונות, יחד עם הלוג של אותה ריצה, ולא אחרי כל ריצה. את `clean_data.csv` אפשר לשחזר בדיוק מהקובץ הגולמי עם `python -m wine_crew.main`. ה-sha256 של הקובץ הגולמי נרשם ב-`artifacts/analyst/dataset_contract.json` ובלוג, כך שרואים על איזה קובץ רצו.
 
 ## מבנה
 

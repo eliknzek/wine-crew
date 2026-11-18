@@ -8,6 +8,7 @@ from crewai import Process
 from wine_crew.crews.scientist.crew import (
     ScientistCrew,
     make_contract_guardrail,
+    make_features_guardrail,
     make_model_card_guardrail,
 )
 from wine_crew.tools.model_report import METRICS_TABLE_PLACEHOLDER, MODEL_CARD_HEADINGS
@@ -54,6 +55,7 @@ def test_every_task_has_a_guardrail_and_contract_failure_is_not_retried(scientis
     tasks = scientist.crew().tasks
     assert all(t.guardrail is not None for t in tasks)
     assert tasks[0].guardrail_max_retries == 0
+    assert tasks[1].guardrail_max_retries == 0
     assert tasks[3].guardrail_max_retries == 3
 
 
@@ -126,3 +128,20 @@ def test_placeholder_survives_crewai_interpolation(scientist):
 
     description = interpolate_only(scientist.crew().tasks[3].description, scientist.inputs())
     assert description.count(METRICS_TABLE_PLACEHOLDER) == 1
+
+
+def test_features_guardrail_runs_gate2_before_training(tmp_path, model_df, small_contract, model_config):
+    from wine_crew.tools.model_tools import build_features
+
+    clean, contract, feats = tmp_path / "clean.csv", tmp_path / "contract.json", tmp_path / "features.csv"
+    model_df.to_csv(clean, index=False)
+    contract.write_text(json.dumps(small_contract))
+    guardrail = make_features_guardrail(feats, clean, contract, model_config)
+    ok, message = guardrail(_Out("done"))
+    assert not ok and "features.csv" in message and "not found" in message
+    good = build_features(model_df, small_contract, model_config, "v2")
+    good.to_csv(feats, index=False)
+    assert guardrail(_Out("done")) == (True, "done")
+    good.assign(taster_name="A").to_csv(feats, index=False)
+    ok, message = guardrail(_Out("done"))
+    assert not ok and message == "Feature check failed: taster_name is a leakage column"

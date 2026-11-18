@@ -1,0 +1,108 @@
+{
+  "target": "points",
+  "selected": "v2",
+  "selection_metric": "cv_mae",
+  "models": {
+    "baseline": {
+      "cv": {
+        "mae": 2.5382,
+        "mae_std": 0.0147,
+        "rmse": 3.0988,
+        "rmse_std": 0.0173,
+        "r2": -0.0,
+        "r2_std": 0.0
+      },
+      "test": {
+        "mae": 2.538,
+        "rmse": 3.1006,
+        "r2": -0.0001
+      }
+    },
+    "v1": {
+      "cv": {
+        "mae": 1.8282,
+        "mae_std": 0.0101,
+        "rmse": 2.3037,
+        "rmse_std": 0.0148,
+        "r2": 0.4473,
+        "r2_std": 0.0044
+      },
+      "test": {
+        "mae": 1.8219,
+        "rmse": 2.2957,
+        "r2": 0.4517
+      }
+    },
+    "v2": {
+      "cv": {
+        "mae": 1.6986,
+        "mae_std": 0.0107,
+        "rmse": 2.165,
+        "rmse_std": 0.0159,
+        "r2": 0.5119,
+        "r2_std": 0.0057
+      },
+      "test": {
+        "mae": 1.6895,
+        "rmse": 2.1516,
+        "r2": 0.5184
+      }
+    }
+  },
+  "selected_test_mae_reduction_vs_baseline_pct": 33.4302,
+  "data": {
+    "source": "zynicide/wine-reviews",
+    "collected_year": 2017,
+    "rows": 111537,
+    "n_train": 89229,
+    "n_test": 22308,
+    "train_pct": 80,
+    "test_pct": 20,
+    "cv_folds": 5,
+    "seed": 42,
+    "points_min": 80,
+    "points_max": 100,
+    "top_country": "US",
+    "top_country_he": "ארה\"ב",
+    "top_country_share_pct": 45.0416
+  },
+  "features": {
+    "input_columns": {
+      "baseline": [
+        "price",
+        "vintage",
+        "country",
+        "province",
+        "variety"
+      ],
+      "v1": [
+        "price",
+        "vintage",
+        "country",
+        "province",
+        "variety"
+      ],
+      "v2": [
+        "price",
+        "vintage",
+        "country",
+        "province",
+        "variety",
+        "region_1"
+      ]
+    },
+    "leakage_columns": [
+      "description",
+      "taster_name"
+    ],
+    "excluded_columns": [
+      "designation"
+    ],
+    "region_1_max_categories": 255,
+    "min_category_count": 50
+  },
+  "value_ranking": {
+    "top_n": 50,
+    "method": "out-of-fold"
+  }
+}

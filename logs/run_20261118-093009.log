@@ -1,0 +1,24 @@
+2026-11-18T11:30:10 INFO [20261118-093009-b17c94] run 20261118-093009-b17c94 started; log logs/run_20261118-093009.log
+2026-11-18T11:30:10 INFO [20261118-093009-b17c94] step preflight: start
+2026-11-18T11:30:10 INFO [20261118-093009-b17c94] check preflight: PASSED - ok {"raw_csv": "data/raw/winemag-data-130k-v2.csv", "sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9"}
+2026-11-18T11:30:10 INFO [20261118-093009-b17c94] raw file data/raw/winemag-data-130k-v2.csv sha256=52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9 rows=129971
+2026-11-18T11:30:10 INFO [20261118-093009-b17c94] step preflight: end (0.0s)
+2026-11-18T11:30:10 INFO [20261118-093009-b17c94] step crew1: start
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] crew1 tokens: total=63384 prompt=57408 cached=16896 completion=5976 requests=36 cost=$0.0109
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] crew1 rows: in=129971 out=111537
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] step crew1: end (37.1s)
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] step gate_contract: start
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] check contract: PASSED - ok {"rows": 111537, "sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9"}
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] step gate_contract: end (0.1s)
+2026-11-18T11:30:47 INFO [20261118-093009-b17c94] step crew2: start
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] crew2 tokens: total=28628 prompt=24356 cached=5632 completion=4272 requests=32 cost=$0.0058
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] crew2 rows: in=111537 out=111537
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] step crew2: end (40.8s)
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] step gate_features: start
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] check features: PASSED - ok {"rows": 111537, "columns": ["log_price", "vintage", "vintage_missing", "country", "province", "variety", "region_1"]}
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] step gate_features: end (0.1s)
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] step gate_model: start
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] check model: PASSED - ok {"selected": "v2", "mae": 1.6895, "baseline_mae": 2.538, "sample_predictions": [88.02, 87.54, 86.15, 91.39, 86.26]}
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] train rows: train=89229 test=22308; selected v2 MAE 1.6895 vs baseline 2.5380
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] step gate_model: end (0.0s)
+2026-11-18T11:31:28 INFO [20261118-093009-b17c94] run passed in 78.2s; total cost $0.0167; summary artifacts/run_summary.json

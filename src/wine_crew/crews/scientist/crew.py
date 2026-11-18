@@ -25,6 +25,7 @@ from wine_crew.crews.common import make_files_guardrail, make_llm, strip_fences 
 from crewai import Agent, Crew, Process, Task  # noqa: E402
 from crewai.project import CrewBase, agent, crew, task  # noqa: E402
 
+from wine_crew.checks import FlowCheckError, check_features  # noqa: E402
 from wine_crew.tools import crewai_tools as ct  # noqa: E402
 from wine_crew.tools.eda_tools import insight_number_violations  # noqa: E402
 from wine_crew.tools.model_report import (  # noqa: E402
@@ -67,6 +68,26 @@ def make_contract_guardrail(check_json: Path):
         check = json.loads(check_json.read_text(encoding="utf-8"))
         if not check.get("passed"):
             return False, "Contract check failed:\n- " + "\n- ".join(check.get("violations") or ["unknown"])
+        return True, output.raw
+
+    return guardrail
+
+
+def make_features_guardrail(features_csv: Path, clean_csv: Path, contract_json: Path,
+                            config: dict[str, Any]):
+    """Guardrail: Flow gate 2 (checks.check_features) on features.csv, before training starts.
+
+    Used with guardrail_max_retries=0, so bad features stop the crew at once.
+    """
+
+    def guardrail(output):  # (TaskOutput) -> tuple[bool, Any]; unannotated, see above
+        try:
+            contract = json.loads(contract_json.read_text(encoding="utf-8"))
+            check_features(features_csv, clean_csv, contract, config)
+        except FlowCheckError as exc:
+            return False, exc.message
+        except OSError as exc:
+            return False, f"Feature check failed: {exc}"
         return True, output.raw
 
     return guardrail
@@ -141,8 +162,11 @@ class ScientistCrew:
 
     @task
     def features_task(self) -> Task:
+        p = self.paths
         return Task(config=self.tasks_config["features_task"],
-                    guardrail=make_files_guardrail([self.paths["features_csv"]]))
+                    guardrail=make_features_guardrail(p["features_csv"], p["clean_csv"],
+                                                      p["contract_json"], self.config),
+                    guardrail_max_retries=0)
 
     @task
     def train_task(self) -> Task:
