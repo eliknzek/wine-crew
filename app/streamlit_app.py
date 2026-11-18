@@ -28,6 +28,10 @@ RTL_CSS = """
 <style>
 .stApp, .stMarkdown, .stTabs, [data-testid="stSidebar"] { direction: rtl; text-align: right; }
 .stMarkdown ul, .stMarkdown ol, .stMarkdown li { direction: rtl; text-align: right; }
+/* Headings and captions: set the direction explicitly, so a line that starts with Latin text
+   (e.g. "wine-crew · ...") is still laid out right-to-left. */
+[data-testid="stHeading"], [data-testid="stHeading"] h1, [data-testid="stHeading"] h2,
+[data-testid="stHeading"] h3, [data-testid="stCaptionContainer"] { direction: rtl; text-align: right; }
 [data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
 /* Dropdown lists open in a popover outside the widget, so target the dropdown itself. */
 [data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] { direction: rtl; }
@@ -80,8 +84,8 @@ def _missing(name: str) -> None:
 config = load_config()
 data = _data()
 
-st.title("🍷 wine-crew: ניקוד יינות ויינות ששווים את מחירם")
-st.caption("כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
+st.title("🍷 ניקוד יינות ויינות ששווים את מחירם")
+st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
 
 overview, analysis, model_tab, value_tab, predict_tab = st.tabs(TABS)
 

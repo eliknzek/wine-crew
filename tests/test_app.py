@@ -129,3 +129,11 @@ def test_model_table_shows_zero_not_negative_zero(app):
     table = next(d for d in app.dataframe if "מודל" in d.value.columns).value
     baseline = table[table["מודל"] == "baseline"].iloc[0]
     assert f"{baseline['R² (test)']:.2f}" == "0.00"
+
+
+def test_title_is_hebrew_and_page_title_stays(app):
+    assert app.title[0].value == "🍷 ניקוד יינות ויינות ששווים את מחירם"
+    assert app.caption[0].value.startswith("wine-crew · כל המספרים")
+    source = open(APP, encoding="utf-8").read()
+    assert 'page_title="wine-crew"' in source
+    assert '[data-testid="stHeading"]' in source and '[data-testid="stCaptionContainer"]' in source
