@@ -11,23 +11,14 @@ Manual run (writes to artifacts/analyst/, needs OPENAI_API_KEY in .env):
 from __future__ import annotations
 
 import json
-import os
-import re
 import time
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
+from wine_crew.config import load_config, resolve_path
+from wine_crew.crews.common import make_files_guardrail, make_llm, strip_fences  # loads .env first
 
-from wine_crew.config import REPO_ROOT, load_config, resolve_path
-
-load_dotenv(REPO_ROOT / ".env")
-# No anonymous telemetry or tracing from CrewAI.
-os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
-os.environ.setdefault("OTEL_SDK_DISABLED", "true")
-os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
-
-from crewai import LLM, Agent, Crew, Process, Task  # noqa: E402
+from crewai import Agent, Crew, Process, Task  # noqa: E402
 from crewai.project import CrewBase, agent, crew, task  # noqa: E402
 
 from wine_crew.tools import crewai_tools as ct  # noqa: E402
@@ -36,11 +27,8 @@ from wine_crew.tools.eda_tools import (  # noqa: E402
     insight_style_violations,
 )
 
-_FENCE = re.compile(r"^```(?:markdown|md)?\s*\n(.*?)\n```\s*$", re.DOTALL)
-
-
-def make_llm(config: dict[str, Any]) -> LLM:
-    return LLM(model=config["llm"]["model"], temperature=config["llm"]["temperature"])
+__all__ = ["AnalystCrew", "analyst_paths", "make_files_guardrail", "make_insights_guardrail",
+           "make_llm", "run_analyst", "strip_fences"]
 
 
 def analyst_paths(config: dict[str, Any], out_dir: str | Path | None = None) -> dict[str, Path]:
@@ -55,12 +43,6 @@ def analyst_paths(config: dict[str, Any], out_dir: str | Path | None = None) -> 
         "insights_md": out / "insights.md",
         "contract_json": out / "dataset_contract.json",
     }
-
-
-def strip_fences(text: str) -> str:
-    text = text.strip()
-    match = _FENCE.match(text)
-    return match.group(1).strip() if match else text
 
 
 def make_insights_guardrail(summary_json: Path):
@@ -81,21 +63,6 @@ def make_insights_guardrail(summary_json: Path):
         if problems:
             return False, "Fix these problems and rewrite the full Markdown:\n- " + "\n- ".join(problems)
         return True, text
-
-    return guardrail
-
-
-def make_files_guardrail(required: list[Path]):
-    """Guardrail: pass only if the task's tools actually wrote every required file."""
-
-    def guardrail(output):  # (TaskOutput) -> tuple[bool, Any]; unannotated, see above
-        missing = [p for p in required if not p.exists()]
-        if missing:
-            return False, (
-                "These files were not created: " + ", ".join(str(p) for p in missing)
-                + ". Call the remaining tools from the task description with the exact paths given."
-            )
-        return True, output.raw
 
     return guardrail
 

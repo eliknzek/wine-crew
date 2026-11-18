@@ -24,6 +24,8 @@ from wine_crew.tools.data_tools import (
     sha256_file,
 )
 from wine_crew.tools.eda_tools import build_html_report, eda_summary, make_charts
+from wine_crew.tools.model_report import evaluation_report_md, metrics_document
+from wine_crew.tools.model_tools import build_features, rank_value_wines, save_model, train_models
 
 # Tools may read inside ALLOWED_ROOTS and write only inside WRITE_ROOTS, so an
 # agent can never overwrite data/raw or source files. Tests add tmp dirs to both.
@@ -146,11 +148,74 @@ def run_build_contract(
             "row_count": contract["observed"]["row_count"]}
 
 
-def run_validate_contract(config: dict[str, Any], clean_csv_path: str, contract_json_path: str) -> dict[str, Any]:
+def run_validate_contract(
+    config: dict[str, Any], clean_csv_path: str, contract_json_path: str,
+    output_json_path: str | None = None,
+) -> dict[str, Any]:
+    """Validate; with output_json_path also write the result (Crew 2's contract_check.json)."""
     clean_path, contract_path = _safe_path(clean_csv_path), _safe_path(contract_json_path)
+    out = _safe_output_path(output_json_path) if output_json_path else None
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     violations = validate_contract(read_clean_csv(clean_path, contract), contract)
-    return {"passed": not violations, "violations": violations}
+    result = {"passed": not violations, "violations": violations}
+    if out is not None:
+        _write_json(out, result)
+        result = {**result, "output_json": _rel(out)}
+    return result
+
+
+def _write_json(path: Path, obj: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _load_clean_and_contract(clean_csv_path: str, contract_json_path: str):
+    contract = json.loads(_safe_path(contract_json_path).read_text(encoding="utf-8"))
+    return read_clean_csv(_safe_path(clean_csv_path), contract), contract
+
+
+def run_build_features(
+    config: dict[str, Any], clean_csv_path: str, contract_json_path: str, output_csv_path: str
+) -> dict[str, Any]:
+    """v2 features (the superset of v1). A forbidden column returns passed=false and writes nothing."""
+    out = _safe_output_path(output_csv_path)
+    df, contract = _load_clean_and_contract(clean_csv_path, contract_json_path)
+    try:
+        features = build_features(df, contract, config, version="v2")
+    except ValueError as exc:
+        return {"passed": False, "violations": str(exc).split("; ")}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    features.to_csv(out, index=False)
+    return {"passed": True, "output_csv": _rel(out), "rows": int(len(features)),
+            "columns": list(features.columns)}
+
+
+def run_train_models(
+    config: dict[str, Any], clean_csv_path: str, contract_json_path: str,
+    model_path: str, metrics_json_path: str, report_md_path: str,
+) -> dict[str, Any]:
+    """Train baseline/v1/v2, rank value wines with the selected version, write the three outputs."""
+    model_out, metrics_out, report_out = (
+        _safe_output_path(model_path), _safe_output_path(metrics_json_path),
+        _safe_output_path(report_md_path),
+    )
+    df, contract = _load_clean_and_contract(clean_csv_path, contract_json_path)
+    result = train_models(df, contract, config)
+    metrics = metrics_document(result, df, contract, config)
+    ranking = rank_value_wines(df, config, result["selected"], top_n=config["model"]["value_top_n"])
+    save_model(result["models"][result["selected"]], model_out)
+    _write_json(metrics_out, metrics)
+    report_out.parent.mkdir(parents=True, exist_ok=True)
+    report_out.write_text(evaluation_report_md(metrics, ranking), encoding="utf-8")
+    return {
+        "selected": metrics["selected"],
+        "test_mae": {n: m["test"]["mae"] for n, m in metrics["models"].items()},
+        "model_path": _rel(model_out), "metrics_json": _rel(metrics_out), "report_md": _rel(report_out),
+    }
+
+
+def run_read_metrics(metrics_json_path: str) -> dict[str, Any]:
+    return json.loads(_safe_path(metrics_json_path).read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------------------------- CrewAI tools
@@ -194,6 +259,25 @@ class _BuildContractInput(BaseModel):
 class _ValidateInput(BaseModel):
     clean_csv_path: str = Field(..., description="Path to clean_data.csv")
     contract_json_path: str = Field(..., description="Path to dataset_contract.json")
+    output_json_path: str | None = Field(None, description="Optional: where to write the result JSON")
+
+
+class _FeaturesInput(BaseModel):
+    clean_csv_path: str = Field(..., description="Path to clean_data.csv")
+    contract_json_path: str = Field(..., description="Path to dataset_contract.json")
+    output_csv_path: str = Field(..., description="Where to write features.csv")
+
+
+class _TrainInput(BaseModel):
+    clean_csv_path: str = Field(..., description="Path to clean_data.csv")
+    contract_json_path: str = Field(..., description="Path to dataset_contract.json")
+    model_path: str = Field(..., description="Where to write model.pkl")
+    metrics_json_path: str = Field(..., description="Where to write metrics.json")
+    report_md_path: str = Field(..., description="Where to write evaluation_report.md")
+
+
+class _ReadMetricsInput(BaseModel):
+    metrics_json_path: str = Field(..., description="Path to metrics.json")
 
 
 class _ConfiguredTool(BaseTool):
@@ -272,5 +356,37 @@ class ValidateContractTool(_ConfiguredTool):
     description: str = "Check clean_data.csv against dataset_contract.json; returns passed and the list of violations."
     args_schema: type[BaseModel] = _ValidateInput
 
-    def _run(self, clean_csv_path: str, contract_json_path: str) -> str:
-        return _dump(run_validate_contract(self.config, clean_csv_path, contract_json_path))
+    def _run(self, clean_csv_path: str, contract_json_path: str, output_json_path: str | None = None) -> str:
+        return _dump(run_validate_contract(self.config, clean_csv_path, contract_json_path, output_json_path))
+
+
+class BuildFeaturesTool(_ConfiguredTool):
+    name: str = "build_features"
+    description: str = ("Build the model features from clean_data.csv using only columns the contract "
+                        "allows, and write features.csv; returns passed=false with violations otherwise.")
+    args_schema: type[BaseModel] = _FeaturesInput
+
+    def _run(self, clean_csv_path: str, contract_json_path: str, output_csv_path: str) -> str:
+        return _dump(run_build_features(self.config, clean_csv_path, contract_json_path, output_csv_path))
+
+
+class TrainModelsTool(_ConfiguredTool):
+    name: str = "train_models"
+    description: str = ("Train and evaluate baseline, v1 (Ridge) and v2 (HistGradientBoosting) with the fixed "
+                        "split and CV, select the best by CV MAE, rank value wines out-of-fold, and write "
+                        "model.pkl, metrics.json and evaluation_report.md.")
+    args_schema: type[BaseModel] = _TrainInput
+
+    def _run(self, clean_csv_path: str, contract_json_path: str, model_path: str,
+             metrics_json_path: str, report_md_path: str) -> str:
+        return _dump(run_train_models(self.config, clean_csv_path, contract_json_path,
+                                      model_path, metrics_json_path, report_md_path))
+
+
+class ReadMetricsTool(BaseTool):
+    name: str = "read_metrics"
+    description: str = "Read the full metrics JSON. These are the only numbers you may quote."
+    args_schema: type[BaseModel] = _ReadMetricsInput
+
+    def _run(self, metrics_json_path: str) -> str:
+        return _dump(run_read_metrics(metrics_json_path))

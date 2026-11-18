@@ -15,3 +15,5 @@ logs/*.log
 # Crew outputs stay out of Git until the full Flow commits them (step 5); remove then.
 artifacts/analyst/*
 !artifacts/analyst/.gitkeep
+artifacts/scientist/*
+!artifacts/scientist/.gitkeep

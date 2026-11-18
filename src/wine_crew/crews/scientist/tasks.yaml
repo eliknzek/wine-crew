@@ -1,1 +1,94 @@
-# tasks for the scientist crew. Filled in step 4.
+# Paths in {braces} come from ScientistCrew.inputs() at kickoff.
+
+validate_task:
+  description: >
+    Call validate_contract with clean_csv_path="{clean_csv}",
+    contract_json_path="{contract_json}" and output_json_path="{contract_check}".
+    Report whether validation passed and list every violation exactly as returned.
+  expected_output: >
+    The validation result: passed, or the list of violations exactly as returned.
+  agent: contract_validator
+
+features_task:
+  description: >
+    Call build_features with clean_csv_path="{clean_csv}",
+    contract_json_path="{contract_json}" and output_csv_path="{features_csv}".
+    Report the number of rows and the feature columns, exactly as returned.
+  expected_output: >
+    The features.csv path, its row count and its columns.
+  agent: feature_engineer
+
+train_task:
+  description: >
+    Call train_models with clean_csv_path="{clean_csv}",
+    contract_json_path="{contract_json}", model_path="{model_pkl}",
+    metrics_json_path="{metrics_json}" and report_md_path="{evaluation_report}".
+    Call it once; it trains, evaluates, selects and ranks. Report the selected
+    version and the test MAE of every model, exactly as returned.
+  expected_output: >
+    The selected version, the test MAE of baseline, v1 and v2, and the paths
+    of model.pkl, metrics.json and evaluation_report.md.
+  agent: model_trainer
+
+model_card_task:
+  description: >
+    Call read_metrics with metrics_json_path="{metrics_json}". Using ONLY
+    numbers from that JSON (copied or rounded, never computed), write
+    model_card.md in Hebrew for the wine buyer of a retail chain. Column,
+    model and country names from the JSON may stay in English unless a
+    template says otherwise.
+
+    Start with the line "# Model Card", then use exactly these five "##"
+    headings, in this order. Where a template is given, copy it word for word
+    and replace only the <placeholders>. Each placeholder names a JSON field
+    and how to write it: "rounded" means round to a whole number (45.04 -> 45);
+    "2 decimals" means round to two decimals (1.6903 -> 1.69); "as is" means
+    copy the value unchanged. Never write a value like 45.04% or 1.0.
+
+    "## מטרה"
+      Two sentences, no numbers: the model predicts the WineEnthusiast score
+      (ניקוד) of a wine from its price, origin, variety and vintage, and helps
+      find wines whose score is higher than their price predicts.
+
+    "## נתונים"
+      Exactly these lines:
+      - מקור: ביקורות WineEnthusiast מ-Kaggle (<data.source, as is>), שנאספו ב-<data.collected_year, as is>.
+      - <data.rows, as is> יינות אחרי ניקוי: <data.n_train, as is> לאימון ו-<data.n_test, as is> לבדיקה (חלוקה <data.train_pct, as is>/<data.test_pct, as is>, seed <data.seed, as is>).
+      - הערכה: <data.cv_folds, as is>-fold CV על קבוצת האימון, והמודל נבחר לפי MAE ממוצע ב-CV.
+      - features של v1: <features.input_columns.v1, comma separated>. features של v2: <features.input_columns.v2, comma separated>.
+
+    "## מדדים"
+      First this exact line, alone on its line, copied character for character
+      (the code replaces it with the metrics table; do not write any table and
+      do not write MAE, RMSE or R² values yourself):
+      {metrics_table_placeholder}
+      Then this line:
+      המודל שנבחר: <selected, as is>, לפי MAE ממוצע ב-CV. ה-MAE שלו על קבוצת הבדיקה נמוך ב-<selected_test_mae_reduction_vs_baseline_pct, rounded>% מזה של ה-baseline.
+      Then one sentence explaining MAE in plain words (the average error in points).
+
+    "## מגבלות"
+      Exactly these eight lines, in this order:
+      - הנתונים נאספו ב-<data.collected_year, as is> ממקור אחד (WineEnthusiast), ולכן ייתכן שאינם מייצגים מבקרים או שווקים אחרים.
+      - <data.top_country_share_pct, rounded>% מהיינות מ<data.top_country_he, as is> אחרי ניקוי, ולכן התחזיות למדינות אחרות מבוססות על פחות נתונים.
+      - נכללו רק יינות שקיבלו <data.points_min, as is> נקודות ומעלה, ולכן המודל לא יודע לחזות יינות חלשים יותר.
+      - הניקוד ניתן ע"י טועמים ולכן הוא סובייקטיבי: המודל חוזה את דעת המבקרים, לא איכות אובייקטיבית.
+      - הוחרגו עמודות של דליפת מידע: <features.leakage_columns, joined with " ו-">, שקיימות רק אחרי הטעימה.
+      - vintage (בציר) נשאר כ-feature כי הוא ידוע לפני הטעימה.
+      - ב-region_1 (נתוני אזור) המודל משתמש לכל היותר ב-<features.region_1_max_categories, as is> קטגוריות, והשאר מקובצות יחד.
+      - בדיקת המספרים האוטומטית מוודאת שכל מספר במסמך מגיע מהנתונים, אבל לא שהוא משויך לטענה הנכונה.
+
+    "## היבטים אתיים"
+      First this line:
+      - המודל נועד לתמיכה בהחלטה ולא להחליף טעימה.
+      Then one or two "-" bullets without numbers (for example: a high predicted
+      score does not guarantee a wine fits the chain's customers; small
+      producers and rare regions are under-represented).
+
+    Hebrew terms: points = "ניקוד" (not "דירוג"); taster = "טועם".
+    Rules: use "-" bullets, not numbered lists. Do not add numbers that are not
+    in the JSON (no differences, ratios or percentages you calculate yourself).
+  expected_output: >
+    A Markdown document in Hebrew starting with "# Model Card" and five "##"
+    sections, every number taken from the metrics JSON. Output only the
+    Markdown, without code fences.
+  agent: model_card_writer
