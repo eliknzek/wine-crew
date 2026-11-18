@@ -36,7 +36,7 @@ SCORING = {
     "r2": "r2",
 }
 RANKING_COLUMNS = [
-    "title", "winery", "country", "province", "variety", "vintage", "price", "points",
+    "title", "winery", "country", "province", "region_1", "variety", "vintage", "price", "points",
 ]
 
 

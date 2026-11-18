@@ -146,7 +146,8 @@ def test_train_models_writes_model_metrics_and_report(model_inputs, model_config
 
     d = model_inputs["dir"]
     result = ct.run_train_models(model_config, model_inputs["clean"], model_inputs["contract"],
-                                 str(d / "model.pkl"), str(d / "metrics.json"), str(d / "evaluation_report.md"))
+                                 str(d / "model.pkl"), str(d / "metrics.json"), str(d / "evaluation_report.md"),
+                                 str(d / "value_ranking.csv"))
     metrics = json.loads((d / "metrics.json").read_text())
     assert result["selected"] == metrics["selected"]
     assert set(result["test_mae"]) == {"baseline", "v1", "v2"}
@@ -156,9 +157,14 @@ def test_train_models_writes_model_metrics_and_report(model_inputs, model_config
     report = (d / "evaluation_report.md").read_text()
     assert "## מדדים" in report and report.count("\n| ") >= 50
     assert ct.run_read_metrics(str(d / "metrics.json")) == metrics
+    ranking = pd.read_csv(d / "value_ranking.csv")
+    assert list(ranking.columns) == ct.VALUE_RANKING_COLUMNS
+    assert len(ranking) == result["ranked_wines"] == len(model_df)
+    assert ranking["rank"].tolist() == list(range(1, len(model_df) + 1))
+    assert ranking["value_score"].is_monotonic_decreasing
     with pytest.raises(ValueError, match="inside artifacts/"):
         ct.run_train_models(model_config, model_inputs["clean"], model_inputs["contract"],
-                            "src/model.pkl", str(d / "m.json"), str(d / "r.md"))
+                            "src/model.pkl", str(d / "m.json"), str(d / "r.md"), str(d / "v.csv"))
 
 
 def test_crew2_basetool_names():

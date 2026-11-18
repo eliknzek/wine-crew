@@ -148,9 +148,14 @@ def check_features(features_csv: Path, clean_csv: Path, contract: dict[str, Any]
 # --------------------------------------------------------------------------- gate 3
 
 
-def check_model(metrics_json: Path, model_pkl: Path, clean_csv: Path,
-                contract: dict[str, Any]) -> dict[str, Any]:
-    """Gate 3: the selected model beats the baseline on test MAE, and model.pkl loads and predicts."""
+VALUE_RANKING_REQUIRED = ["title", "country", "province", "variety", "price", "points",
+                          "predicted", "value_score"]
+
+
+def check_model(metrics_json: Path, model_pkl: Path, clean_csv: Path, contract: dict[str, Any],
+                value_ranking_csv: Path) -> dict[str, Any]:
+    """Gate 3: the selected model beats the baseline on test MAE, model.pkl loads and predicts,
+    and value_ranking.csv ranks every clean wine."""
     label = "Model check failed"
     metrics = _read_json(metrics_json, "model", label)
     try:
@@ -164,7 +169,8 @@ def check_model(metrics_json: Path, model_pkl: Path, clean_csv: Path,
         raise FlowCheckError("model", f"{label}: MAE {mae:.2f} >= baseline {baseline:.2f}",
                              {"mae": mae, "baseline_mae": baseline})
 
-    sample = _read_csv(clean_csv, "model", label, contract).head(5)
+    clean = _read_csv(clean_csv, "model", label, contract)
+    sample = clean.head(5)
     try:
         model = load_model(model_pkl)
     except Exception as exc:  # noqa: BLE001
@@ -175,5 +181,13 @@ def check_model(metrics_json: Path, model_pkl: Path, clean_csv: Path,
         raise FlowCheckError("model", f"{label}: model.pkl could not predict ({type(exc).__name__}: {exc})") from None
     if pred.shape != (len(sample),) or not np.isfinite(pred).all():
         raise FlowCheckError("model", f"{label}: model.pkl returned invalid predictions {pred.tolist()}")
+
+    ranking = _read_csv(value_ranking_csv, "model", label)
+    missing = [c for c in VALUE_RANKING_REQUIRED if c not in ranking.columns]
+    if missing:
+        raise FlowCheckError("model", f"{label}: value_ranking.csv is missing columns: {', '.join(missing)}")
+    if len(ranking) != len(clean):
+        raise FlowCheckError("model", f"{label}: value_ranking.csv has {len(ranking)} rows, "
+                                      f"clean_data has {len(clean)}")
     return {"selected": selected, "mae": mae, "baseline_mae": baseline,
-            "sample_predictions": [round(float(p), 2) for p in pred]}
+            "sample_predictions": [round(float(p), 2) for p in pred], "ranked_wines": int(len(ranking))}

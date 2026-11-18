@@ -50,6 +50,7 @@ def scientist_paths(config: dict[str, Any], out_dir: str | Path | None = None,
         "model_pkl": out / "model.pkl",
         "metrics_json": out / "metrics.json",
         "evaluation_report": out / "evaluation_report.md",
+        "value_ranking": out / "value_ranking.csv",
         "model_card": out / "model_card.md",
     }
 
@@ -173,7 +174,7 @@ class ScientistCrew:
         p = self.paths
         return Task(config=self.tasks_config["train_task"],
                     guardrail=make_files_guardrail([p["model_pkl"], p["metrics_json"],
-                                                    p["evaluation_report"]]))
+                                                    p["evaluation_report"], p["value_ranking"]]))
 
     @task
     def model_card_task(self) -> Task:

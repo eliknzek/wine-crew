@@ -22,12 +22,13 @@ train_task:
   description: >
     Call train_models with clean_csv_path="{clean_csv}",
     contract_json_path="{contract_json}", model_path="{model_pkl}",
-    metrics_json_path="{metrics_json}" and report_md_path="{evaluation_report}".
+    metrics_json_path="{metrics_json}", report_md_path="{evaluation_report}"
+    and ranking_csv_path="{value_ranking}".
     Call it once; it trains, evaluates, selects and ranks. Report the selected
     version and the test MAE of every model, exactly as returned.
   expected_output: >
     The selected version, the test MAE of baseline, v1 and v2, and the paths
-    of model.pkl, metrics.json and evaluation_report.md.
+    of model.pkl, metrics.json, evaluation_report.md and value_ranking.csv.
   agent: model_trainer
 
 model_card_task:
