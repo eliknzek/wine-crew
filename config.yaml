@@ -14,10 +14,17 @@ paths:
   eda_report: artifacts/analyst/eda_report.html
   insights: artifacts/analyst/insights.md
   run_summary: artifacts/run_summary.json
+  contract_check: artifacts/scientist/contract_check.json
+  features_csv: artifacts/scientist/features.csv
+  model_pkl: artifacts/scientist/model.pkl
+  metrics_json: artifacts/scientist/metrics.json
+  evaluation_report: artifacts/scientist/evaluation_report.md
+  model_card: artifacts/scientist/model_card.md
 
 data_source:
   kaggle_dataset: zynicide/wine-reviews
   file: winemag-data-130k-v2.csv
+  collected_year: 2017        # the reviews were scraped in 2017 (single source)
 
 cleaning:
   vintage_min: 1980
