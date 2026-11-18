@@ -8,6 +8,7 @@ share, minimum points, the region_1 category cap) is put there by code.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pandas as pd
@@ -159,7 +160,10 @@ def fill_metrics_table(text: str, metrics: dict[str, Any]) -> str:
     count = text.count(METRICS_TABLE_PLACEHOLDER)
     if count != 1:
         raise ValueError(f"{METRICS_TABLE_PLACEHOLDER} must appear exactly once, found {count}")
-    return text.replace(METRICS_TABLE_PLACEHOLDER, metrics_table_md(metrics))
+    # Exactly one blank line before and after: without the one after, GitHub
+    # renders the next line as part of the table.
+    pattern = re.compile(r"\n*[ \t]*" + re.escape(METRICS_TABLE_PLACEHOLDER) + r"[ \t]*\n*")
+    return pattern.sub(lambda _: "\n\n" + metrics_table_md(metrics) + "\n\n", text)
 
 
 # --------------------------------------------------------------------------- model card style

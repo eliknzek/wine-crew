@@ -211,6 +211,14 @@ def test_placeholder_outside_metrics_section(us_metrics):
     assert any("must be inside '## מדדים'" in v for v in model_card_style_violations(text, us_metrics))
 
 
+@pytest.mark.parametrize("before, after", [("\n", "\n"), ("\n\n", "\n\n"), ("\n  ", "  \n\n\n")])
+def test_fill_metrics_table_puts_one_blank_line_around_table(before, after):
+    table = metrics_table_md(_table_metrics())
+    filled = fill_metrics_table(f"## מדדים{before}{METRICS_TABLE_PLACEHOLDER}{after}המודל שנבחר: v2.",
+                                _table_metrics())
+    assert filled == f"## מדדים\n\n{table}\n\nהמודל שנבחר: v2."
+
+
 def test_filled_card_passes_number_check(us_metrics):
     filled = fill_metrics_table(card(us_metrics), us_metrics)
     assert insight_number_violations(filled, us_metrics) == []
