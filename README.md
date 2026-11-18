@@ -1,5 +1,7 @@
 # wine-crew
 
+אפליקציה חיה: https://wine-crew.streamlit.app/
+
 מערכת CrewAI שחוזה את ניקוד היין (`points`) לפי מחיר, מקור, זן ובציר, ומאתרת יינות שקיבלו ניקוד גבוה ממה שהמחיר שלהם צפוי לתת. Flow אחד מריץ שני crews בשרשרת, Data Analyst ואחריו Data Scientist, ויש בדיקות דטרמיניסטיות בין השלבים. האפיון המלא נמצא ב-[`docs/spec.md`](docs/spec.md), וחוזה הנתונים ב-[`docs/dataset_contract.json`](docs/dataset_contract.json).
 
 > שלבים 1–5 ו-7 הושלמו: הכלים, שני ה-crews, ה-Flow עם השערים, ואפליקציית Streamlit.
@@ -48,16 +50,16 @@ streamlit run app/streamlit_app.py
 
 ## פריסה
 
-האפליקציה מיועדת ל-Streamlit Community Cloud:
+האפליקציה פרוסה מ-`main` ב-Streamlit Community Cloud, וכל merge ל-`main` מעדכן את האתר.
 
-- **Entrypoint:** `app/streamlit_app.py`.
+- **קובץ הכניסה:** `app/streamlit_app.py`.
 - **תלויות:** `app/requirements.txt`, עם גרסאות זהות ל-`requirements.txt` הראשי ובלי crewai. Cloud קורא אותו כי הוא נמצא ליד ה-entrypoint.
 - **Python:** 3.13. בוחרים אותו ב-Advanced settings, כי ברירת המחדל שם היא 3.12.
 - **חבילת `wine_crew`:** לא מותקנת. האפליקציה מוסיפה את `src/` ל-`sys.path` בעצמה.
-- **סודות:** לא נדרשים.
+- **סודות:** אין צורך בסודות.
 - **עיצוב:** הפונט (Rubik) מוגדר ב-`.streamlit/config.toml`.
 
-קישור לאפליקציה: _(יתווסף אחרי הפריסה)_
+קישור לאפליקציה: https://wine-crew.streamlit.app/
 
 ## תוצרים ב-Git
 
