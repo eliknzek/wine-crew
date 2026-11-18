@@ -58,10 +58,10 @@ model_card_task:
       - features של v1: <features.input_columns.v1, comma separated>. features של v2: <features.input_columns.v2, comma separated>.
 
     "## מדדים"
-      This table, one row per model in models (baseline, v1, v2):
-      | מודל | CV MAE | MAE (test) | RMSE (test) | R² (test) |
-      | --- | --- | --- | --- | --- |
-      | <name> | <models.NAME.cv.mae, 2 decimals> | <models.NAME.test.mae, 2 decimals> | <models.NAME.test.rmse, 2 decimals> | <models.NAME.test.r2, 2 decimals> |
+      First this exact line, alone on its line, copied character for character
+      (the code replaces it with the metrics table; do not write any table and
+      do not write MAE, RMSE or R² values yourself):
+      {metrics_table_placeholder}
       Then this line:
       המודל שנבחר: <selected, as is>, לפי MAE ממוצע ב-CV. ה-MAE שלו על קבוצת הבדיקה נמוך ב-<selected_test_mae_reduction_vs_baseline_pct, rounded>% מזה של ה-baseline.
       Then one sentence explaining MAE in plain words (the average error in points).

@@ -10,7 +10,7 @@ from wine_crew.crews.scientist.crew import (
     make_contract_guardrail,
     make_model_card_guardrail,
 )
-from wine_crew.tools.model_report import MODEL_CARD_HEADINGS
+from wine_crew.tools.model_report import METRICS_TABLE_PLACEHOLDER, MODEL_CARD_HEADINGS
 
 EXPECTED_TOOLS = {
     "Contract Validator": {"validate_contract"},
@@ -101,7 +101,7 @@ def _card(extra=""):
         "- ב-region_1 לכל היותר 255 קטגוריות.",
         "- מספרים מגיעים מהנתונים, אבל לא שהוא משויך לטענה הנכונה.",
     ])
-    return (f"# Model Card\n\n{h[0]}\nמטרה.\n\n{h[1]}\nנתונים.\n\n{h[2]}\nMAE 1.69. {extra}\n"
+    return (f"# Model Card\n\n{h[0]}\nמטרה.\n\n{h[1]}\nנתונים.\n\n{h[2]}\n{METRICS_TABLE_PLACEHOLDER}\n{extra}\n"
             f"המודל שנבחר: v2, לפי MAE.\n\n{h[3]}\n{limits}\n\n{h[4]}\n- המודל נועד לתמיכה בהחלטה ולא להחליף טעימה.\n")
 
 
@@ -117,3 +117,12 @@ def test_model_card_guardrail(tmp_path):
     assert not ok and "33" in message
     ok, message = guardrail(_Out(_card().replace('מארה"ב', "מ-US")))
     assert not ok and "top-country share" in message
+    ok, message = guardrail(_Out(_card().replace(METRICS_TABLE_PLACEHOLDER, "")))
+    assert not ok and "exactly once" in message
+
+
+def test_placeholder_survives_crewai_interpolation(scientist):
+    from crewai.utilities.string_utils import interpolate_only
+
+    description = interpolate_only(scientist.crew().tasks[3].description, scientist.inputs())
+    assert description.count(METRICS_TABLE_PLACEHOLDER) == 1

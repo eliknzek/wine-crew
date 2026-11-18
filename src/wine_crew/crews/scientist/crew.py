@@ -4,7 +4,8 @@ Contract Validator -> Feature Engineer -> Model Trainer -> Model Card Writer.
 Agents only call the deterministic tools. The crew stops at the first task if
 the contract check fails, so no model is ever trained on broken data. The
 model card must pass a guardrail that rejects any number not found in
-metrics.json and checks the fixed templates.
+metrics.json and checks the fixed templates; its metrics table is built in code
+from metrics.json and replaces the {{METRICS_TABLE}} line before saving.
 
 Manual run (reads artifacts/analyst/, writes artifacts/scientist/, needs
 OPENAI_API_KEY in .env):
@@ -26,7 +27,11 @@ from crewai.project import CrewBase, agent, crew, task  # noqa: E402
 
 from wine_crew.tools import crewai_tools as ct  # noqa: E402
 from wine_crew.tools.eda_tools import insight_number_violations  # noqa: E402
-from wine_crew.tools.model_report import model_card_style_violations  # noqa: E402
+from wine_crew.tools.model_report import (  # noqa: E402
+    METRICS_TABLE_PLACEHOLDER,
+    fill_metrics_table,
+    model_card_style_violations,
+)
 
 
 def scientist_paths(config: dict[str, Any], out_dir: str | Path | None = None,
@@ -103,7 +108,10 @@ class ScientistCrew:
         self.llm = make_llm(self.config)
 
     def inputs(self) -> dict[str, str]:
-        return {k: str(v) for k, v in self.paths.items()}
+        # The placeholder goes in as an input: written literally in tasks.yaml,
+        # CrewAI would read {METRICS_TABLE} inside it as a missing variable.
+        return {**{k: str(v) for k, v in self.paths.items()},
+                "metrics_table_placeholder": METRICS_TABLE_PLACEHOLDER}
 
     def _agent(self, name: str, tools: list) -> Agent:
         return Agent(config=self.agents_config[name], tools=tools, llm=self.llm,
@@ -158,7 +166,8 @@ class ScientistCrew:
 def run_scientist(config: dict[str, Any] | None = None, out_dir: str | Path | None = None,
                   clean_csv: str | Path | None = None, contract_json: str | Path | None = None,
                   verbose: bool = False) -> dict[str, Any]:
-    """Run Crew 2 end to end. Writes model_card.md only after the guardrail passed."""
+    """Run Crew 2 end to end. Writes model_card.md only after the guardrail passed,
+    with the metrics table placeholder replaced by the table built from metrics.json."""
     scientist = ScientistCrew(config=config, out_dir=out_dir, clean_csv=clean_csv,
                               contract_json=contract_json, verbose=verbose)
     card_path = ct._safe_output_path(scientist.paths["model_card"])
@@ -167,7 +176,8 @@ def run_scientist(config: dict[str, Any] | None = None, out_dir: str | Path | No
     seconds = time.monotonic() - start
 
     outputs = {t.name or str(i): t.raw for i, t in enumerate(result.tasks_output)}
-    card = strip_fences(result.tasks_output[3].raw)
+    metrics = json.loads(scientist.paths["metrics_json"].read_text(encoding="utf-8"))
+    card = fill_metrics_table(strip_fences(result.tasks_output[3].raw), metrics)
     card_path.parent.mkdir(parents=True, exist_ok=True)
     card_path.write_text(card + "\n", encoding="utf-8")
 

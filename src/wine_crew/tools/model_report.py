@@ -24,6 +24,8 @@ MODEL_CARD_HEADINGS = [
     "## מגבלות",
     "## היבטים אתיים",
 ]
+# The Model Card Writer writes this line; run_scientist replaces it with metrics_table_md.
+METRICS_TABLE_PLACEHOLDER = "{{METRICS_TABLE}}"
 ETHICS_PHRASES = ["תמיכה בהחלטה", "לא להחליף טעימה"]
 GUARDRAIL_LIMIT_PHRASE = "אבל לא שהוא משויך לטענה הנכונה"
 
@@ -131,6 +133,35 @@ def evaluation_report_md(metrics: dict[str, Any], ranking: pd.DataFrame) -> str:
     return "\n".join(lines) + "\n"
 
 
+# --------------------------------------------------------------------------- model card table
+
+
+def _fmt2(x: float) -> str:
+    """Two decimals, never "-0.00" (a tiny negative such as R² -0.0001 prints as 0.00)."""
+    text = f"{x:.2f}"
+    return "0.00" if text == "-0.00" else text
+
+
+def metrics_table_md(metrics: dict[str, Any]) -> str:
+    """The model card's metrics table, built from metrics.json in code."""
+    lines = [
+        "| מודל | CV MAE | MAE (test) | RMSE (test) | R² (test) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for name, m in metrics["models"].items():
+        cells = [m["cv"]["mae"], m["test"]["mae"], m["test"]["rmse"], m["test"]["r2"]]
+        lines.append(f"| {name} | " + " | ".join(_fmt2(v) for v in cells) + " |")
+    return "\n".join(lines)
+
+
+def fill_metrics_table(text: str, metrics: dict[str, Any]) -> str:
+    """Replace the single placeholder line with the table. Raises if it is not there exactly once."""
+    count = text.count(METRICS_TABLE_PLACEHOLDER)
+    if count != 1:
+        raise ValueError(f"{METRICS_TABLE_PLACEHOLDER} must appear exactly once, found {count}")
+    return text.replace(METRICS_TABLE_PLACEHOLDER, metrics_table_md(metrics))
+
+
 # --------------------------------------------------------------------------- model card style
 
 
@@ -170,6 +201,14 @@ def model_card_style_violations(text: str, metrics: dict[str, Any]) -> list[str]
         out.append(f"round the percentage {token.strip()} to a whole number")
 
     metrics_section = _section(text, "## מדדים")
+    count = text.count(METRICS_TABLE_PLACEHOLDER)
+    if count != 1:
+        out.append(f"write the line {METRICS_TABLE_PLACEHOLDER} exactly once, in '## מדדים' "
+                   f"(found {count}); do not write the metrics table yourself")
+    elif METRICS_TABLE_PLACEHOLDER not in metrics_section:
+        out.append(f"the line {METRICS_TABLE_PLACEHOLDER} must be inside '## מדדים'")
+    if any(line.lstrip().startswith("|") for line in metrics_section.splitlines()):
+        out.append(f"do not write a metrics table; the code inserts it at {METRICS_TABLE_PLACEHOLDER}")
     selected_line = f"המודל שנבחר: {metrics['selected']}"
     if selected_line not in metrics_section:
         out.append(f"section '## מדדים' must include the line '{selected_line}, ...'")

@@ -7,8 +7,11 @@ from wine_crew.config import load_config
 from wine_crew.tools.data_tools import load_contract_template
 from wine_crew.tools.eda_tools import insight_number_violations
 from wine_crew.tools.model_report import (
+    METRICS_TABLE_PLACEHOLDER,
     MODEL_CARD_HEADINGS,
     evaluation_report_md,
+    fill_metrics_table,
+    metrics_table_md,
     metrics_document,
     model_card_style_violations,
 )
@@ -83,9 +86,8 @@ def card(metrics, **replace):
     sections = {
         "goal": "המודל חוזה את הניקוד של יין לפי מחיר, מקור, זן ובציר.",
         "data": f"- מקור: {d['source']}, נאסף ב-{d['collected_year']}.\n- {d['rows']} יינות אחרי ניקוי.",
-        "scores": "| מודל | MAE |\n| --- | --- |\n"
-                   f"| v2 | {metrics['models']['v2']['test']['mae']:.2f} |\n\n"
-                   f"המודל שנבחר: {metrics['selected']}, לפי MAE ממוצע ב-CV.",
+        "scores": f"{METRICS_TABLE_PLACEHOLDER}\n"
+                  f"המודל שנבחר: {metrics['selected']}, לפי MAE ממוצע ב-CV.",
         "limits": "\n".join([
             f"- הנתונים נאספו ב-{d['collected_year']} ממקור אחד.",
             f"- {round(d['top_country_share_pct'])}% מהיינות מ{d['top_country_he']} אחרי ניקוי.",
@@ -154,7 +156,7 @@ def test_missing_and_out_of_order_headings(us_metrics):
 def test_trailing_zero_and_selected_line_and_ethics(us_metrics):
     text = card(us_metrics, data="- 1.0 משהו.")
     assert "write 1.0 as a whole number (1)" in model_card_style_violations(text, us_metrics)
-    no_selected = card(us_metrics, scores="| v2 | 1.69 |")
+    no_selected = card(us_metrics, scores=METRICS_TABLE_PLACEHOLDER)
     assert any(v.startswith("section '## מדדים'") for v in model_card_style_violations(no_selected, us_metrics))
     no_ethics = card(us_metrics, ethics="- המודל טוב.")
     assert any(v.startswith("section '## היבטים אתיים'") for v in model_card_style_violations(no_ethics, us_metrics))
@@ -165,3 +167,50 @@ def test_number_check_against_metrics(us_metrics):
     assert insight_number_violations("MAE של 1.69 ו-R² של v2", us_metrics) == []
     assert insight_number_violations("שיפור של 37.5%", us_metrics) == ["37.5"]
     assert insight_number_violations(card(us_metrics), us_metrics) == []
+
+
+# --------------------------------------------------------------------------- metrics table placeholder
+
+
+def _table_metrics():
+    return {"models": {
+        "baseline": {"cv": {"mae": 2.538}, "test": {"mae": 2.538, "rmse": 3.1006, "r2": -0.0001}},
+        "v2": {"cv": {"mae": 1.6991}, "test": {"mae": 1.6903, "rmse": 2.1524, "r2": 0.5183}},
+    }}
+
+
+def test_metrics_table_has_two_decimals_and_no_negative_zero():
+    table = metrics_table_md(_table_metrics())
+    assert "| baseline | 2.54 | 2.54 | 3.10 | 0.00 |" in table
+    assert "| v2 | 1.70 | 1.69 | 2.15 | 0.52 |" in table
+    assert "-0" not in table
+
+
+def test_fill_metrics_table_replaces_exactly_one_placeholder():
+    filled = fill_metrics_table(f"## מדדים\n{METRICS_TABLE_PLACEHOLDER}\nסוף", _table_metrics())
+    assert METRICS_TABLE_PLACEHOLDER not in filled and "| v2 | 1.70 |" in filled
+    for text in ("## מדדים\n", METRICS_TABLE_PLACEHOLDER * 2):
+        with pytest.raises(ValueError, match="exactly once"):
+            fill_metrics_table(text, _table_metrics())
+
+
+@pytest.mark.parametrize("scores, expected", [
+    ("המודל שנבחר: {sel}.", "exactly once"),
+    ("{ph}\n{ph}\nהמודל שנבחר: {sel}.", "exactly once"),
+    ("{ph}\n| v2 | 1.69 |\nהמודל שנבחר: {sel}.", "do not write a metrics table"),
+])
+def test_placeholder_rules(us_metrics, scores, expected):
+    scores = scores.format(ph=METRICS_TABLE_PLACEHOLDER, sel=us_metrics["selected"])
+    violations = model_card_style_violations(card(us_metrics, scores=scores), us_metrics)
+    assert any(expected in v for v in violations)
+
+
+def test_placeholder_outside_metrics_section(us_metrics):
+    text = card(us_metrics, scores=f"המודל שנבחר: {us_metrics['selected']}.",
+                goal=f"מטרה.\n{METRICS_TABLE_PLACEHOLDER}")
+    assert any("must be inside '## מדדים'" in v for v in model_card_style_violations(text, us_metrics))
+
+
+def test_filled_card_passes_number_check(us_metrics):
+    filled = fill_metrics_table(card(us_metrics), us_metrics)
+    assert insight_number_violations(filled, us_metrics) == []

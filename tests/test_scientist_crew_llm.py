@@ -13,7 +13,11 @@ import pytest
 from wine_crew.config import resolve_path
 from wine_crew.tools import crewai_tools as ct
 from wine_crew.tools.eda_tools import insight_number_violations
-from wine_crew.tools.model_report import model_card_style_violations
+from wine_crew.tools.model_report import (
+    METRICS_TABLE_PLACEHOLDER,
+    metrics_table_md,
+    model_card_style_violations,
+)
 from wine_crew.tools.model_tools import load_model
 
 pytestmark = pytest.mark.llm
@@ -52,5 +56,8 @@ def test_scientist_crew_end_to_end(tmp_path, monkeypatch, config):
     assert json.loads((out / "contract_check.json").read_text())["passed"] is True
     card = (out / "model_card.md").read_text(encoding="utf-8")
     assert insight_number_violations(card, metrics) == []
-    assert model_card_style_violations(card, metrics) == []
+    table = metrics_table_md(metrics)
+    assert METRICS_TABLE_PLACEHOLDER not in card and card.count(table) == 1
+    # The style rules apply to what the agent wrote, i.e. with the placeholder.
+    assert model_card_style_violations(card.replace(table, METRICS_TABLE_PLACEHOLDER), metrics) == []
     assert load_model(out / "model.pkl") is not None
