@@ -85,10 +85,18 @@ with overview:
         st.subheader("בדיקות")
         checks = pd.DataFrame([
             {"בדיקה": CHECK_NAMES.get(name, name), "עבר": "✅" if c["passed"] else "❌",
-             "פרטים": ad.check_details_text(c["message"])}
+             "פרטים": ad.check_sentence(name, c, summary, data["contract"])}
             for name, c in summary["checks"].items()
         ])
         st.dataframe(checks, hide_index=True, width="stretch")
+        with st.expander("פרטים טכניים"):
+            for name, c in summary["checks"].items():
+                st.markdown(f"**{CHECK_NAMES.get(name, name)}**")
+                details = ad.check_details(c["message"])
+                if details is not None:
+                    st.json(details, expanded=True)
+                else:
+                    st.code(c["message"], language=None)
 
         st.subheader("שורות")
         rows = summary.get("rows", {})

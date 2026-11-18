@@ -188,3 +188,57 @@ def most_common(ranking: pd.DataFrame | None, column: str, options: list[str],
     counts = df[column].value_counts()
     counts = counts[counts.index.isin(set(options))]
     return str(counts.index[0]) if len(counts) else None
+
+
+FAILED_PREFIXES = {
+    "preflight": ("Preflight check failed: ", "הבדיקה המקדימה נכשלה"),
+    "contract": ("Contract check failed: ", "הנתונים הנקיים לא עומדים בחוזה"),
+    "features": ("Feature check failed: ", "ה-features לא תקינים"),
+    "model": ("Model check failed: ", "המודל לא עבר את הבדיקה"),
+}
+
+
+def check_details(message: str) -> dict[str, Any] | None:
+    """The details dict of a passed check ("ok {json}"), or None."""
+    if not message.startswith("ok "):
+        return None
+    try:
+        details = json.loads(message[3:])
+    except ValueError:
+        return None
+    return details if isinstance(details, dict) else None
+
+
+def check_sentence(name: str, check: dict[str, Any], summary: dict[str, Any],
+                   contract: dict[str, Any] | None = None) -> str:
+    """One plain Hebrew sentence per check. Every number comes from the summary or the artifacts."""
+    message = check.get("message", "")
+    if not check.get("passed"):
+        english, hebrew = FAILED_PREFIXES.get(name, ("", "הבדיקה נכשלה"))
+        if name == "preflight" and "raw file not found" in message:
+            return "קובץ הנתונים הגולמי לא נמצא, ולכן הריצה לא התחילה."
+        return f"{hebrew}: {message.removeprefix(english)}"
+    details = check_details(message) or {}
+    rows = summary.get("rows", {})
+    if name == "preflight":
+        sha = details.get("sha256") or summary.get("raw_sha256")
+        contract_sha = (contract or {}).get("source", {}).get("sha256")
+        if sha and contract_sha:
+            relation = "זהה לזו" if sha == contract_sha else "שונה מזו"
+            return f"קובץ הנתונים הגולמי נמצא, וטביעת האצבע שלו (sha256) {relation} שנרשמה בחוזה הנתונים."
+        return "קובץ הנתונים הגולמי נמצא, וטביעת האצבע שלו (sha256) נרשמה."
+    if name == "contract":
+        n = details.get("rows", rows.get("clean"))
+        return f"הנתונים הנקיים עומדים בכל כללי החוזה: {n:,} שורות." if n is not None else \
+            "הנתונים הנקיים עומדים בכל כללי החוזה."
+    if name == "features":
+        n_cols, n_rows = len(details.get("columns", [])), details.get("rows", rows.get("features"))
+        return f"נבנו {n_cols} עמודות features לכל {n_rows:,} השורות."
+    if name == "model":
+        selected = details.get("selected", summary.get("selected"))
+        mae, base = details.get("mae"), details.get("baseline_mae")
+        if mae is None or base is None:
+            return f"המודל שנבחר ({selected}) עבר את הבדיקה."
+        return (f"המודל שנבחר ({selected}) טועה בממוצע ב-{mae:.2f} נקודות, "
+                f"לעומת {base:.2f} בניחוש הבסיס.")
+    return check_details_text(message)

@@ -96,3 +96,46 @@ def test_most_common(model, ranking):
     assert ad.most_common(ranking, "province", opts["province"], {"country": "US"}) == "California"
     assert ad.most_common(ranking, "variety", opts["variety"]) == "Pinot Noir"
     assert ad.most_common(None, "country", opts["country"]) is None
+
+
+def _ok(details):
+    return {"passed": True, "message": "ok " + __import__("json").dumps(details)}
+
+
+SUMMARY = {"rows": {"clean": 1234, "features": 1234}, "selected": "v1", "raw_sha256": "abc"}
+
+
+def test_check_sentences_use_the_summary_numbers():
+    contract = {"source": {"sha256": "abc"}}
+    assert ad.check_sentence("preflight", _ok({"raw_csv": "x.csv", "sha256": "abc"}), SUMMARY, contract) == \
+        "קובץ הנתונים הגולמי נמצא, וטביעת האצבע שלו (sha256) זהה לזו שנרשמה בחוזה הנתונים."
+    assert "שונה מזו שנרשמה" in ad.check_sentence("preflight", _ok({"sha256": "abc"}), SUMMARY, {"source": {"sha256": "zzz"}})
+    assert ad.check_sentence("contract", _ok({"rows": 1234, "sha256": "abc"}), SUMMARY) == \
+        "הנתונים הנקיים עומדים בכל כללי החוזה: 1,234 שורות."
+    assert ad.check_sentence("features", _ok({"rows": 1234, "columns": ["a", "b", "c"]}), SUMMARY) == \
+        "נבנו 3 עמודות features לכל 1,234 השורות."
+    assert ad.check_sentence("model", _ok({"selected": "v1", "mae": 1.8219, "baseline_mae": 2.538}), SUMMARY) == \
+        "המודל שנבחר (v1) טועה בממוצע ב-1.82 נקודות, לעומת 2.54 בניחוש הבסיס."
+
+
+@pytest.mark.parametrize("name, message, expected", [
+    ("preflight", "Preflight check failed: raw file not found: data/raw/x.csv", "קובץ הנתונים הגולמי לא נמצא"),
+    ("contract", "Contract check failed: price has 812 nulls (allowed 0)",
+     "הנתונים הנקיים לא עומדים בחוזה: price has 812 nulls (allowed 0)"),
+    ("features", "Feature check failed: taster_name is a leakage column",
+     "ה-features לא תקינים: taster_name is a leakage column"),
+    ("model", "Model check failed: MAE 2.61 >= baseline 2.54", "המודל לא עבר את הבדיקה: MAE 2.61 >= baseline 2.54"),
+])
+def test_failed_check_sentence_says_what_failed(name, message, expected):
+    assert ad.check_sentence(name, {"passed": False, "message": message}, SUMMARY).startswith(expected)
+
+
+def test_check_sentences_on_the_real_summary(data):
+    s = data["summary"]
+    sentences = {n: ad.check_sentence(n, c, s, data["contract"]) for n, c in s["checks"].items()}
+    assert sentences["contract"] == f"הנתונים הנקיים עומדים בכל כללי החוזה: {s['rows']['clean']:,} שורות."
+    assert f"({s['selected']})" in sentences["model"]
+    assert "זהה" in sentences["preflight"]
+    assert not any("{" in v or "sha256:" in v for v in sentences.values())
+    assert ad.check_details(s["checks"]["features"]["message"])["columns"]
+    assert ad.check_details("Contract check failed: x") is None

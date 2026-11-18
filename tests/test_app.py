@@ -34,8 +34,11 @@ def test_overview_is_readable(app):
     assert any("20" in m.value and "מזהה ריצה" in m.value for m in app.markdown)   # full run id, not a metric
     checks = next(d for d in app.dataframe if "בדיקה" in d.value.columns)
     assert "שער 2 (features)" in set(checks.value["בדיקה"])
-    assert not any(v.startswith("ok {") for v in checks.value["פרטים"])
-    assert any("שורות: 111,537" in v for v in checks.value["פרטים"])
+    details = list(checks.value["פרטים"])
+    assert "הנתונים הנקיים עומדים בכל כללי החוזה: 111,537 שורות." in details
+    assert not any("{" in v or "sha256:" in v for v in details)
+    expander = next(e for e in app.expander if e.label == "פרטים טכניים")
+    assert len(expander.json) == 4                 # the original details of each check
 
 
 def test_form_defaults_are_most_common(app):
