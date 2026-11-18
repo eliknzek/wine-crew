@@ -27,15 +27,16 @@ st.set_page_config(page_title="wine-crew", page_icon="🍷", layout="wide")
 RTL_CSS = """
 <style>
 .stApp, .stMarkdown, .stTabs, [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+.stMarkdown ul, .stMarkdown ol, .stMarkdown li { direction: rtl; text-align: right; }
 [data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
 .stMarkdown table { direction: rtl; }
 </style>
 """
-st.markdown(RTL_CSS, unsafe_allow_html=True)
+st.html(RTL_CSS)
 
 TABS = ["סקירה", "ניתוח", "מודל", "מציאת שווים למחיר", "חיזוי"]
-CHECK_NAMES = {"preflight": "בדיקה מקדימה (קובץ גולמי)", "contract": "שער 1: חוזה נתונים",
-               "features": "שער 2: features", "model": "שער 3: מודל"}
+CHECK_NAMES = {"preflight": "בדיקה מקדימה (קובץ גולמי)", "contract": "שער 1 (חוזה נתונים)",
+               "features": "שער 2 (features)", "model": "שער 3 (מודל)"}
 
 
 @st.cache_data
@@ -75,15 +76,16 @@ with overview:
         (st.success if passed else st.error)(
             f"סטטוס הריצה האחרונה: **{summary['status']}**"
             + ("" if passed else f" (נעצרה בבדיקה {summary.get('failed_check')}: {summary.get('error')})"))
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("מזהה ריצה", summary["run_id"])
-        c2.metric("תאריך (UTC)", summary["started_at"][:16].replace("T", " "))
-        c3.metric("משך", f"{summary['seconds']:.0f} שניות")
-        c4.metric("עלות LLM", f"${summary['total_cost_usd']:.3f}")
+        st.markdown(f"**מזהה ריצה:** `{summary['run_id']}`")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("תאריך (UTC)", summary["started_at"][:16].replace("T", " "))
+        c2.metric("משך", f"{summary['seconds']:.0f} שניות")
+        c3.metric("עלות LLM", f"${summary['total_cost_usd']:.3f}")
 
         st.subheader("בדיקות")
         checks = pd.DataFrame([
-            {"בדיקה": CHECK_NAMES.get(name, name), "עבר": "✅" if c["passed"] else "❌", "פרטים": c["message"]}
+            {"בדיקה": CHECK_NAMES.get(name, name), "עבר": "✅" if c["passed"] else "❌",
+             "פרטים": ad.check_details_text(c["message"])}
             for name, c in summary["checks"].items()
         ])
         st.dataframe(checks, hide_index=True, width="stretch")
@@ -131,7 +133,9 @@ with model_tab:
              "RMSE (test)": m["test"]["rmse"], "R² (test)": m["test"]["r2"]}
             for name, m in metrics["models"].items()
         ])
-        st.dataframe(table.round(3), hide_index=True, width="stretch")
+        st.dataframe(table, hide_index=True, width="stretch", column_config={
+            col: st.column_config.NumberColumn(col, format="%.2f")
+            for col in ("CV MAE", "MAE (test)", "RMSE (test)", "R² (test)")})
         st.caption("MAE הוא השגיאה הממוצעת בנקודות ניקוד. המודל נבחר לפי MAE ממוצע ב-CV, "
                    "וקבוצת הבדיקה משמשת רק לדיווח.")
     if data["model_card"]:
@@ -152,22 +156,26 @@ with value_tab:
         countries = ranking["country"].value_counts().index.tolist()
         varieties = ranking["variety"].value_counts().index.tolist()
         f1, f2 = st.columns(2)
-        chosen_countries = f1.multiselect("מדינה", countries, key="value_countries")
-        chosen_varieties = f2.multiselect("זן", varieties, key="value_varieties")
+        chosen_countries = f1.multiselect("מדינה", countries, key="value_countries",
+                                          placeholder="כל המדינות (אפשר לבחור כמה)")
+        chosen_varieties = f2.multiselect("זן", varieties, key="value_varieties",
+                                          placeholder="כל הזנים (אפשר לבחור כמה)")
         lo, hi = ad.price_range(data["contract"])
         p1, p2, p3 = st.columns(3)
         price_min = p1.number_input("מחיר מינימלי ($)", lo, hi, lo, step=1.0, key="value_price_min")
-        price_max = p2.number_input("מחיר מקסימלי ($)", lo, hi, 50.0, step=1.0, key="value_price_max")
+        file_max = min(hi, float(ranking["price"].max()))
+        price_max = p2.number_input("מחיר מקסימלי ($)", lo, hi, file_max, step=1.0, key="value_price_max")
         top = p3.slider("מספר יינות", 10, 200, 50, step=10, key="value_top")
         result = ad.filter_ranking(ranking, chosen_countries, chosen_varieties, price_min, price_max, top)
         st.caption(f"{len(result)} יינות מוצגים")
+        shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))))
         st.dataframe(
-            result[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
-                    "predicted", "value_score"]],
+            shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
+                   "predicted", "value_score"]],
             hide_index=True, width="stretch", key="value_table",
             column_config={
                 "rank": "דירוג כללי", "title": "יין", "country": "מדינה", "province": "מחוז",
-                "variety": "זן", "vintage": st.column_config.NumberColumn("בציר", format="%d"),
+                "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),
                 "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
                 "points": "ניקוד", "predicted": st.column_config.NumberColumn("ניקוד צפוי", format="%.1f"),
                 "value_score": st.column_config.NumberColumn("ציון שווי", format="%.2f"),
@@ -189,15 +197,24 @@ with predict_tab:
         lo, hi = ad.price_range(data["contract"])
         vmin, vmax = ad.vintage_range(config)
         with st.container(border=True):
+            def _index(options, column, where=None):
+                # Default to the most common option in the data, not the first alphabetically.
+                top = ad.most_common(ranking, column, options, where)
+                return options.index(top) if top in options else 0
+
             c1, c2 = st.columns(2)
-            country = c1.selectbox("מדינה", sorted(opts["country"]),
-                                   index=sorted(opts["country"]).index("US") if "US" in opts["country"] else 0,
+            country_opts = sorted(opts["country"])
+            country = c1.selectbox("מדינה", country_opts, index=_index(country_opts, "country"),
                                    key="form_country")
             province_opts = provinces.get(country) or sorted(opts["province"])
-            province = c2.selectbox("מחוז", province_opts, key="form_province")
+            province = c2.selectbox("מחוז", province_opts,
+                                    index=_index(province_opts, "province", {"country": country}),
+                                    key="form_province")
             region_opts = [ad.UNKNOWN] + regions.get(province, [])
             region = c1.selectbox("אזור (region_1)", region_opts, key="form_region")
-            variety = c2.selectbox("זן", sorted(opts["variety"]), key="form_variety")
+            variety_opts = sorted(opts["variety"])
+            variety = c2.selectbox("זן", variety_opts, index=_index(variety_opts, "variety"),
+                                   key="form_variety")
             price = c1.number_input("מחיר ($)", lo, hi, 25.0, step=1.0, key="form_price")
             vintage = c2.selectbox("בציר", [ad.UNKNOWN] + list(range(vmax, vmin - 1, -1)), index=4,
                                    key="form_vintage")

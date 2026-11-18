@@ -141,3 +141,50 @@ def filter_ranking(ranking: pd.DataFrame, countries: list[str] | None = None,
     if price_max is not None:
         df = df[df["price"] <= price_max]
     return df.sort_values(["value_score", "title"], ascending=[False, True], kind="mergesort").head(top)
+
+
+# --------------------------------------------------------------------------- display helpers
+
+DETAIL_LABELS = {
+    "raw_csv": "קובץ", "sha256": "sha256", "rows": "שורות", "columns": "עמודות",
+    "selected": "מודל נבחר", "mae": "MAE", "baseline_mae": "MAE של baseline",
+    "sample_predictions": "תחזיות לדוגמה", "ranked_wines": "יינות בדירוג",
+}
+
+
+def _detail_value(key: str, value: Any) -> str:
+    if key == "sha256" and isinstance(value, str):
+        return value[:12] + "…"
+    if isinstance(value, bool) or value is None:
+        return str(value)
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    if isinstance(value, list):
+        return ", ".join(_detail_value(key, v) for v in value)
+    return str(value)
+
+
+def check_details_text(message: str) -> str:
+    """A check message from run_summary.json ("ok {json}" or a failure text) as readable text."""
+    if not message.startswith("ok "):
+        return message
+    try:
+        details = json.loads(message[3:])
+    except ValueError:
+        return message
+    return " · ".join(f"{DETAIL_LABELS.get(k, k)}: {_detail_value(k, v)}" for k, v in details.items())
+
+
+def most_common(ranking: pd.DataFrame | None, column: str, options: list[str],
+                where: dict[str, Any] | None = None) -> str | None:
+    """The option that appears most often in the ranking (optionally within a filter)."""
+    if ranking is None or not options:
+        return None
+    df = ranking
+    for col, value in (where or {}).items():
+        df = df[df[col] == value]
+    counts = df[column].value_counts()
+    counts = counts[counts.index.isin(set(options))]
+    return str(counts.index[0]) if len(counts) else None

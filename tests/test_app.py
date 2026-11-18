@@ -30,6 +30,20 @@ def test_app_loads_with_five_tabs(app):
     assert any("ניקוד חציוני" in m.value for m in app.markdown)   # insights.md rendered
 
 
+def test_overview_is_readable(app):
+    assert any("20" in m.value and "מזהה ריצה" in m.value for m in app.markdown)   # full run id, not a metric
+    checks = next(d for d in app.dataframe if "בדיקה" in d.value.columns)
+    assert "שער 2 (features)" in set(checks.value["בדיקה"])
+    assert not any(v.startswith("ok {") for v in checks.value["פרטים"])
+    assert any("שורות: 111,537" in v for v in checks.value["פרטים"])
+
+
+def test_form_defaults_are_most_common(app):
+    assert app.selectbox(key="form_country").value == "US"
+    assert app.selectbox(key="form_province").value == "California"
+    assert app.selectbox(key="form_variety").value == "Pinot Noir"
+
+
 def test_prediction_form(app):
     app.selectbox(key="form_country").select("France").run()
     assert "Bordeaux" in app.selectbox(key="form_province").options
@@ -53,4 +67,14 @@ def test_value_filter(app):
     assert not app.exception
     table = next(d for d in app.dataframe if "value_score" in d.value.columns)
     assert len(table.value) == 50 and set(table.value["country"]) == {"Italy"}
-    assert (table.value["price"] <= 50).all()
+    assert app.number_input(key="value_price_max").value == 3300.0      # max price in the file
+    assert app.multiselect(key="value_varieties").placeholder.startswith("כל הזנים")
+
+
+def test_missing_vintage_shown_empty(app):
+    app.slider(key="value_top").set_value(200).run()
+    app.multiselect(key="value_countries").select("France").run()
+    table = next(d for d in app.dataframe if "value_score" in d.value.columns)
+    vintages = table.value["vintage"]
+    assert "None" not in set(vintages) and "nan" not in set(vintages)
+    assert all(v == "" or v.isdigit() for v in vintages)

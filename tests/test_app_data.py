@@ -81,3 +81,18 @@ def test_missing_files_are_none(tmp_path):
     cfg = {**CONFIG, "paths": {**CONFIG["paths"], "artifacts_scientist": str(tmp_path),
                                "value_ranking": str(tmp_path / "v.csv")}}
     assert ad.load_model(cfg) is None and ad.load_ranking(cfg) is None
+
+
+def test_check_details_text():
+    msg = 'ok {"rows": 111537, "sha256": "52af2643c8ac29f010f0cc", "mae": 1.6895, "columns": ["a", "b"]}'
+    assert ad.check_details_text(msg) == "שורות: 111,537 · sha256: 52af2643c8ac… · MAE: 1.69 · עמודות: a, b"
+    assert ad.check_details_text("Contract check failed: x") == "Contract check failed: x"
+    assert ad.check_details_text("ok not-json") == "ok not-json"
+
+
+def test_most_common(model, ranking):
+    opts = ad.model_options(model)
+    assert ad.most_common(ranking, "country", opts["country"]) == "US"
+    assert ad.most_common(ranking, "province", opts["province"], {"country": "US"}) == "California"
+    assert ad.most_common(ranking, "variety", opts["variety"]) == "Pinot Noir"
+    assert ad.most_common(None, "country", opts["country"]) is None
