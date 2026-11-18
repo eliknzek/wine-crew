@@ -100,3 +100,67 @@ def test_basetools_return_json_strings(pipeline_outputs, config):
                                 ct.ValidateContractTool)}
     assert names == {"load_raw", "clean_data", "eda_summary", "make_charts", "build_html_report",
                      "read_eda_summary", "build_contract", "validate_contract"}
+
+
+# --------------------------------------------------------------------------- Crew 2 tools
+
+
+@pytest.fixture
+def model_inputs(workdir, model_df, small_contract):
+    clean, contract = workdir / "model_clean.csv", workdir / "contract.json"
+    model_df.to_csv(clean, index=False)
+    contract.write_text(json.dumps(small_contract))
+    return {"clean": str(clean), "contract": str(contract), "dir": workdir / "sci"}
+
+
+def test_validate_contract_writes_check_file(model_inputs, config):
+    out = model_inputs["dir"] / "contract_check.json"
+    result = ct.run_validate_contract(config, model_inputs["clean"], model_inputs["contract"], str(out))
+    assert result["passed"] is True
+    assert json.loads(out.read_text()) == {"passed": True, "violations": []}
+    with pytest.raises(ValueError, match="inside artifacts/"):
+        ct.run_validate_contract(config, model_inputs["clean"], model_inputs["contract"], "data/raw/x.json")
+
+
+def test_build_features_writes_only_allowed_columns(model_inputs, model_config):
+    out = model_inputs["dir"] / "features.csv"
+    result = ct.run_build_features(model_config, model_inputs["clean"], model_inputs["contract"], str(out))
+    assert result["passed"] is True
+    df = pd.read_csv(out)
+    assert list(df.columns) == result["columns"]
+    assert {"log_price", "vintage", "vintage_missing", "region_1"} <= set(df.columns)
+    assert not {"description", "taster_name", "title", "winery", "designation", "points"} & set(df.columns)
+
+
+def test_build_features_with_forbidden_column_fails_without_writing(model_inputs, model_config):
+    cfg = {**model_config, "features": {**model_config["features"],
+                                        "categorical": [*model_config["features"]["categorical"], "description"]}}
+    out = model_inputs["dir"] / "features.csv"
+    result = ct.run_build_features(cfg, model_inputs["clean"], model_inputs["contract"], str(out))
+    assert result == {"passed": False, "violations": ["Feature check failed: description is a leakage column"]}
+    assert not out.exists()
+
+
+def test_train_models_writes_model_metrics_and_report(model_inputs, model_config, model_df):
+    from wine_crew.tools.model_tools import load_model
+
+    d = model_inputs["dir"]
+    result = ct.run_train_models(model_config, model_inputs["clean"], model_inputs["contract"],
+                                 str(d / "model.pkl"), str(d / "metrics.json"), str(d / "evaluation_report.md"))
+    metrics = json.loads((d / "metrics.json").read_text())
+    assert result["selected"] == metrics["selected"]
+    assert set(result["test_mae"]) == {"baseline", "v1", "v2"}
+    model = load_model(d / "model.pkl")
+    cols = metrics["features"]["input_columns"][metrics["selected"]]
+    assert len(model.predict(model_df[cols].head(5))) == 5
+    report = (d / "evaluation_report.md").read_text()
+    assert "## מדדים" in report and report.count("\n| ") >= 50
+    assert ct.run_read_metrics(str(d / "metrics.json")) == metrics
+    with pytest.raises(ValueError, match="inside artifacts/"):
+        ct.run_train_models(model_config, model_inputs["clean"], model_inputs["contract"],
+                            "src/model.pkl", str(d / "m.json"), str(d / "r.md"))
+
+
+def test_crew2_basetool_names():
+    names = {t().name for t in (ct.BuildFeaturesTool, ct.TrainModelsTool, ct.ReadMetricsTool)}
+    assert names == {"build_features", "train_models", "read_metrics"}
