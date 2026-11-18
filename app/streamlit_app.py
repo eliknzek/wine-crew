@@ -54,6 +54,21 @@ def _ranking():
     return ad.load_ranking(load_config())
 
 
+def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs) -> None:
+    """The one way to show a table: columns reversed (first column on the right), index hidden,
+    text columns aligned right. Data, rounding, row order and column names are unchanged."""
+    config = dict(column_config or {})
+    for col in df.columns:
+        if not ad.is_text_column(df[col]):
+            continue
+        current = config.get(col)
+        if current is None or isinstance(current, str):
+            config[col] = st.column_config.TextColumn(current, alignment="right")
+        elif isinstance(current, dict):
+            config[col] = {**current, "alignment": "right"}
+    st.dataframe(ad.rtl_columns(df), hide_index=True, width="stretch", column_config=config, **kwargs)
+
+
 def _missing(name: str) -> None:
     st.warning(f"הקובץ {name} לא נמצא. הריצו `python -m wine_crew.main` כדי לייצר את התוצרים.")
 
@@ -88,7 +103,7 @@ with overview:
              "פרטים": ad.check_sentence(name, c, summary, data["contract"])}
             for name, c in summary["checks"].items()
         ])
-        st.dataframe(checks, hide_index=True, width="stretch")
+        show_table_rtl(checks)
         with st.expander("פרטים טכניים"):
             for name, c in summary["checks"].items():
                 st.markdown(f"**{CHECK_NAMES.get(name, name)}**")
@@ -141,7 +156,7 @@ with model_tab:
              "RMSE (test)": m["test"]["rmse"], "R² (test)": m["test"]["r2"]}
             for name, m in metrics["models"].items()
         ])
-        st.dataframe(table, hide_index=True, width="stretch", column_config={
+        show_table_rtl(table, column_config={
             col: st.column_config.NumberColumn(col, format="%.2f")
             for col in ("CV MAE", "MAE (test)", "RMSE (test)", "R² (test)")})
         st.caption("MAE הוא השגיאה הממוצעת בנקודות ניקוד. המודל נבחר לפי MAE ממוצע ב-CV, "
@@ -177,10 +192,10 @@ with value_tab:
         result = ad.filter_ranking(ranking, chosen_countries, chosen_varieties, price_min, price_max, top)
         st.caption(f"{len(result)} יינות מוצגים")
         shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))))
-        st.dataframe(
+        show_table_rtl(
             shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
                    "predicted", "value_score"]],
-            hide_index=True, width="stretch", key="value_table",
+            key="value_table",
             column_config={
                 "rank": "דירוג כללי", "title": "יין", "country": "מדינה", "province": "מחוז",
                 "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),

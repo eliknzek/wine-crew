@@ -139,3 +139,16 @@ def test_check_sentences_on_the_real_summary(data):
     assert not any("{" in v or "sha256:" in v for v in sentences.values())
     assert ad.check_details(s["checks"]["features"]["message"])["columns"]
     assert ad.check_details("Contract check failed: x") is None
+
+
+def test_rtl_columns_reverses_column_order_only():
+    df = pd.DataFrame({"מודל": ["v2", "v1"], "CV MAE": [1.7, 1.83], "R² (test)": [0.52, 0.45]}, index=[5, 3])
+    out = ad.rtl_columns(df)
+    assert list(out.columns) == ["R² (test)", "CV MAE", "מודל"]
+    assert list(out.index) == [5, 3]                       # row order unchanged
+    pd.testing.assert_frame_equal(out[df.columns], df)     # same data, same names
+
+
+def test_is_text_column():
+    df = pd.DataFrame({"a": ["x"], "b": [1.5], "c": [3]})
+    assert [ad.is_text_column(df[c]) for c in df] == [True, False, False]

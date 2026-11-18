@@ -81,3 +81,29 @@ def test_missing_vintage_shown_empty(app):
     vintages = table.value["vintage"]
     assert "None" not in set(vintages) and "nan" not in set(vintages)
     assert all(v == "" or v.isdigit() for v in vintages)
+
+
+def test_every_table_is_right_to_left(app):
+    tables = {tuple(d.value.columns) for d in app.dataframe}
+    checks = next(t for t in tables if "בדיקה" in t)
+    models = next(t for t in tables if "מודל" in t)
+    ranking = next(t for t in tables if "value_score" in t)
+    assert checks == ("פרטים", "עבר", "בדיקה")
+    assert models == ("R² (test)", "RMSE (test)", "MAE (test)", "CV MAE", "מודל")
+    assert ranking[-1] == "rank" and ranking[-2] == "title" and ranking[0] == "value_score"
+
+
+def test_ranking_sort_survives_rtl(app):
+    table = next(d for d in app.dataframe if "value_score" in d.value.columns).value
+    assert table["value_score"].is_monotonic_decreasing
+    assert table["rank"].is_monotonic_increasing
+
+
+def test_text_columns_are_right_aligned(app):
+    import json
+
+    for d in app.dataframe:
+        config = json.loads(d.proto.columns)
+        for col in d.value.columns:
+            if ad.is_text_column(d.value[col]):
+                assert config[col]["alignment"] == "right", col

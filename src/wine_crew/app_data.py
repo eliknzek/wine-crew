@@ -242,3 +242,13 @@ def check_sentence(name: str, check: dict[str, Any], summary: dict[str, Any],
         return (f"המודל שנבחר ({selected}) טועה בממוצע ב-{mae:.2f} נקודות, "
                 f"לעומת {base:.2f} בניחוש הבסיס.")
     return check_details_text(message)
+
+
+def rtl_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """The same table with its columns in reverse order, so the first column ends up on the
+    right in a right-to-left layout. Rows, values and column names are unchanged."""
+    return df[df.columns[::-1]]
+
+
+def is_text_column(series: pd.Series) -> bool:
+    return not (pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series))
