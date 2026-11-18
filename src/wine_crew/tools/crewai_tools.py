@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,10 @@ from wine_crew.tools.data_tools import (
 from wine_crew.tools.eda_tools import build_html_report, eda_summary, make_charts
 from wine_crew.tools.model_report import evaluation_report_md, metrics_document
 from wine_crew.tools.model_tools import build_features, rank_value_wines, save_model, train_models
+
+# Columns of value_ranking.csv, the full out-of-fold ranking the app filters.
+VALUE_RANKING_COLUMNS = ["rank", "title", "country", "province", "region_1", "variety", "vintage",
+                         "price", "points", "predicted", "value_score"]
 
 # Tools may read inside ALLOWED_ROOTS and write only inside WRITE_ROOTS, so an
 # agent can never overwrite data/raw or source files. Tests add tmp dirs to both.
@@ -192,25 +197,32 @@ def run_build_features(
 
 def run_train_models(
     config: dict[str, Any], clean_csv_path: str, contract_json_path: str,
-    model_path: str, metrics_json_path: str, report_md_path: str,
+    model_path: str, metrics_json_path: str, report_md_path: str, ranking_csv_path: str,
 ) -> dict[str, Any]:
-    """Train baseline/v1/v2, rank value wines with the selected version, write the three outputs."""
-    model_out, metrics_out, report_out = (
+    """Train baseline/v1/v2, rank every wine out-of-fold with the selected version, and write
+    model.pkl, metrics.json, evaluation_report.md (top value_top_n) and value_ranking.csv (all wines)."""
+    model_out, metrics_out, report_out, ranking_out = (
         _safe_output_path(model_path), _safe_output_path(metrics_json_path),
-        _safe_output_path(report_md_path),
+        _safe_output_path(report_md_path), _safe_output_path(ranking_csv_path),
     )
     df, contract = _load_clean_and_contract(clean_csv_path, contract_json_path)
     result = train_models(df, contract, config)
     metrics = metrics_document(result, df, contract, config)
-    ranking = rank_value_wines(df, config, result["selected"], top_n=config["model"]["value_top_n"])
+    ranking = rank_value_wines(df, config, result["selected"])
     save_model(result["models"][result["selected"]], model_out)
     _write_json(metrics_out, metrics)
     report_out.parent.mkdir(parents=True, exist_ok=True)
-    report_out.write_text(evaluation_report_md(metrics, ranking), encoding="utf-8")
+    report_out.write_text(evaluation_report_md(metrics, ranking.head(config["model"]["value_top_n"])),
+                          encoding="utf-8")
+    full = ranking.assign(rank=range(1, len(ranking) + 1),
+                          vintage=pd.to_numeric(ranking["vintage"]).astype("Int64"),
+                          predicted=ranking["predicted"].round(4), value_score=ranking["value_score"].round(4))
+    full[VALUE_RANKING_COLUMNS].to_csv(ranking_out, index=False)
     return {
         "selected": metrics["selected"],
         "test_mae": {n: m["test"]["mae"] for n, m in metrics["models"].items()},
         "model_path": _rel(model_out), "metrics_json": _rel(metrics_out), "report_md": _rel(report_out),
+        "ranking_csv": _rel(ranking_out), "ranked_wines": int(len(full)),
     }
 
 
@@ -274,6 +286,7 @@ class _TrainInput(BaseModel):
     model_path: str = Field(..., description="Where to write model.pkl")
     metrics_json_path: str = Field(..., description="Where to write metrics.json")
     report_md_path: str = Field(..., description="Where to write evaluation_report.md")
+    ranking_csv_path: str = Field(..., description="Where to write value_ranking.csv")
 
 
 class _ReadMetricsInput(BaseModel):
@@ -374,13 +387,13 @@ class TrainModelsTool(_ConfiguredTool):
     name: str = "train_models"
     description: str = ("Train and evaluate baseline, v1 (Ridge) and v2 (HistGradientBoosting) with the fixed "
                         "split and CV, select the best by CV MAE, rank value wines out-of-fold, and write "
-                        "model.pkl, metrics.json and evaluation_report.md.")
+                        "model.pkl, metrics.json, evaluation_report.md and value_ranking.csv.")
     args_schema: type[BaseModel] = _TrainInput
 
     def _run(self, clean_csv_path: str, contract_json_path: str, model_path: str,
-             metrics_json_path: str, report_md_path: str) -> str:
+             metrics_json_path: str, report_md_path: str, ranking_csv_path: str) -> str:
         return _dump(run_train_models(self.config, clean_csv_path, contract_json_path,
-                                      model_path, metrics_json_path, report_md_path))
+                                      model_path, metrics_json_path, report_md_path, ranking_csv_path))
 
 
 class ReadMetricsTool(BaseTool):

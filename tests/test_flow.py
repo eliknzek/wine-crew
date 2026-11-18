@@ -12,6 +12,7 @@ import pytest
 
 from wine_crew.checks import FlowCheckError, check_features, expected_feature_columns
 from wine_crew.flow import crew_cost, run_flow
+from wine_crew.tools.crewai_tools import VALUE_RANKING_COLUMNS
 from wine_crew.tools.contract_tools import build_contract, save_contract
 from wine_crew.tools.data_tools import clean_data, load_contract_template, load_raw, read_clean_csv
 from wine_crew.tools.model_report import evaluation_report_md, metrics_document
@@ -72,9 +73,11 @@ def stub_scientist(corrupt=None, calls=None):
         save_model(result["models"][result["selected"]], f"{sci}/model.pkl")
         with open(f"{sci}/metrics.json", "w") as f:
             json.dump(metrics, f)
-        ranking = rank_value_wines(clean, config, result["selected"], top_n=10)
+        ranking = rank_value_wines(clean, config, result["selected"])
         with open(f"{sci}/evaluation_report.md", "w") as f:
-            f.write(evaluation_report_md(metrics, ranking))
+            f.write(evaluation_report_md(metrics, ranking.head(10)))
+        ranking.assign(rank=range(1, len(ranking) + 1))[VALUE_RANKING_COLUMNS].to_csv(
+            f"{sci}/value_ranking.csv", index=False)
         if corrupt:
             corrupt(config)
         return {"seconds": 2.0, "token_usage": FAKE_USAGE}
@@ -134,6 +137,7 @@ def test_passing_run(flow_config, capsys):
     assert "crew1 rows: in=600 out=" in log and "crew2 rows: in=" in log and "train rows: train=" in log
     assert "crew1 tokens: total=1500" in log and "crew2 tokens:" in log and "cost=$" in log
     assert s["raw_sha256"] in log
+    assert s["artifacts"]["value_ranking"].endswith("value_ranking.csv")
     assert re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ INFO \[" + re.escape(s["run_id"]) + "]", log)
 
 
@@ -236,9 +240,21 @@ def _broken_pickle(config):
     open(f"{config['paths']['artifacts_scientist']}/model.pkl", "wb").write(b"\x00not a pickle")
 
 
+def _edit_ranking(fn):
+    def corrupt(config):
+        path = f"{config['paths']['artifacts_scientist']}/value_ranking.csv"
+        fn(path)
+    return corrupt
+
+
 @pytest.mark.parametrize("corrupt, expected", [
     (_worse_than_baseline, ">= baseline"),
     (_broken_pickle, "model.pkl could not be loaded"),
+    (_edit_ranking(os.remove), "value_ranking.csv not found"),
+    (_edit_ranking(lambda p: pd.read_csv(p).iloc[1:].to_csv(p, index=False)),
+     "value_ranking.csv has 599 rows, clean_data has 600"),
+    (_edit_ranking(lambda p: pd.read_csv(p).drop(columns=["value_score"]).to_csv(p, index=False)),
+     "value_ranking.csv is missing columns: value_score"),
 ])
 def test_gate3_stops_on_bad_model(flow_config, capsys, corrupt, expected):
     code = run_flow(flow_config, stub_analyst(), stub_scientist(corrupt))

@@ -130,6 +130,7 @@ def flow_paths(config: dict[str, Any]) -> dict[str, Path]:
         "metrics_json": sci / "metrics.json",
         "model_pkl": sci / "model.pkl",
         "evaluation_report": sci / "evaluation_report.md",
+        "value_ranking": sci / "value_ranking.csv",
         "model_card": sci / "model_card.md",
         "insights": resolve_path(config, "insights"),
         "eda_report": resolve_path(config, "eda_report"),
@@ -222,7 +223,7 @@ class WineFlow(Flow[WineState]):
         with self._log.step("gate_model"):
             details = self._gate("model", lambda: check_model(
                 self._paths["metrics_json"], self._paths["model_pkl"], self._paths["clean_csv"],
-                self._contract()))
+                self._contract(), self._paths["value_ranking"]))
             metrics = json.loads(self._paths["metrics_json"].read_text(encoding="utf-8"))
             self.state.selected = details["selected"]
             self.state.test_mae = {n: m["test"]["mae"] for n, m in metrics["models"].items()}

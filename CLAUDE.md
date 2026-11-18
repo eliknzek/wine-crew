@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A CrewAI Flow (`WineFlow`) runs two crews in sequence, Data Analyst and then Data Scientist. It predicts the WineEnthusiast score `points` (80–100) from price, origin, variety and vintage, and ranks "value" wines that scored above what their price predicts. `docs/spec.md` (Hebrew) is the full spec and the source of truth for architecture, agents, gates and the work order ("סדר עבודה"). `docs/dataset_contract.json` is the interface between the two crews.
 
-Current state: steps 1–5 are done (tools, both crews, `WineFlow` with its gates, logs and `run_summary.json`). The Streamlit app (`app/`) is still a placeholder. Do only the step you are asked for.
+Current state: steps 1–5 and 7 are done (tools, both crews, `WineFlow` with its gates, logs and `run_summary.json`, and the Streamlit app in `app/streamlit_app.py` with its helpers in `src/wine_crew/app_data.py`). Do only the step you are asked for.
 
 ## Commands
 
@@ -17,6 +17,7 @@ python scripts/download_data.py [--force]   # raw CSV -> data/raw/, prints sha25
 pytest                                      # all tests
 pytest tests/test_file.py::test_name        # single test
 python -m wine_crew.main                    # run the whole Flow; exit 1 if a gate stops it
+streamlit run app/streamlit_app.py          # the app (reads artifacts/ only, no API key)
 ```
 
 To change dependencies, edit `requirements.in` and re-lock with `uv pip compile requirements.in --python-version 3.13 -o requirements.txt`. Never hand-edit the lock.
@@ -33,7 +34,7 @@ To change dependencies, edit `requirements.in` and re-lock with `uv pip compile 
 
 - Thresholds, paths and hyperparameters live in `config.yaml`. Read them from there rather than hard-coding them.
 - Gates in `checks.py` are pure Python and independent of the LLM. A failure raises `FlowCheckError`, and the Flow stops cleanly: it logs the check, marks `artifacts/run_summary.json` as failed, and exits with code 1.
-- The Streamlit app only reads `artifacts/` and `model.pkl`. It never runs the Flow and needs no API key.
+- The Streamlit app only reads `artifacts/` and `model.pkl`. It never runs the Flow and needs no API key. It must not import crewai or matplotlib (keep `app_data.py` light), and it adds `src/` to `sys.path` itself so it runs without installing the package. Form options come from the model's learned categories (`group_rare.keep_`), and the value screen reads `artifacts/scientist/value_ranking.csv`.
 
 ## Dataset contract (docs/dataset_contract.json)
 

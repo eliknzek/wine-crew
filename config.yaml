@@ -19,6 +19,7 @@ paths:
   model_pkl: artifacts/scientist/model.pkl
   metrics_json: artifacts/scientist/metrics.json
   evaluation_report: artifacts/scientist/evaluation_report.md
+  value_ranking: artifacts/scientist/value_ranking.csv
   model_card: artifacts/scientist/model_card.md
 
 data_source:

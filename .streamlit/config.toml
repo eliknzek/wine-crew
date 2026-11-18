@@ -1,0 +1,8 @@
+# Theme for the Streamlit app (read from the repo root locally and on Streamlit Cloud).
+[theme]
+# Rubik from Google Fonts for body text and headings; code (and the run id, shown as code)
+# keeps Streamlit's default monospace codeFont.
+font = "Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap"
+headingFont = "Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap"
+baseFontWeight = 400
+headingFontWeights = [700, 700, 700, 500, 500, 500]   # only the loaded weights (400/500/700)
