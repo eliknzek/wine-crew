@@ -1,0 +1,197 @@
+{
+  "contract_version": "0.1-draft",
+  "dataset": "wine_reviews_clean",
+  "source": {
+    "name": "Wine Reviews (WineEnthusiast), Kaggle",
+    "url": "https://www.kaggle.com/datasets/zynicide/wine-reviews",
+    "file": "winemag-data-130k-v2.csv",
+    "license": "CC BY-NC-SA 4.0",
+    "sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9"
+  },
+  "target": "points",
+  "row_count": {
+    "min": 100000,
+    "max": 130000
+  },
+  "unique_rows": true,
+  "columns": [
+    {
+      "name": "points",
+      "dtype": "int64",
+      "nullable": false,
+      "min": 80,
+      "max": 100,
+      "role": "target"
+    },
+    {
+      "name": "price",
+      "dtype": "float64",
+      "nullable": false,
+      "min": 4,
+      "max": 3300,
+      "unit": "USD",
+      "role": "feature"
+    },
+    {
+      "name": "log_price",
+      "dtype": "float64",
+      "nullable": false,
+      "derived_from": "price",
+      "role": "feature"
+    },
+    {
+      "name": "vintage",
+      "dtype": "Int64",
+      "nullable": true,
+      "min": 1980,
+      "max": 2017,
+      "max_null_pct": 5,
+      "derived_from": "title",
+      "role": "feature"
+    },
+    {
+      "name": "country",
+      "dtype": "category",
+      "nullable": false,
+      "max_unique": 50,
+      "role": "feature"
+    },
+    {
+      "name": "province",
+      "dtype": "category",
+      "nullable": false,
+      "max_unique": 450,
+      "role": "feature"
+    },
+    {
+      "name": "variety",
+      "dtype": "category",
+      "nullable": false,
+      "max_unique": 750,
+      "role": "feature"
+    },
+    {
+      "name": "region_1",
+      "dtype": "category",
+      "nullable": true,
+      "max_null_pct": 20,
+      "role": "feature_optional"
+    },
+    {
+      "name": "winery",
+      "dtype": "string",
+      "nullable": false,
+      "role": "identifier"
+    },
+    {
+      "name": "title",
+      "dtype": "string",
+      "nullable": false,
+      "role": "identifier"
+    },
+    {
+      "name": "designation",
+      "dtype": "string",
+      "nullable": true,
+      "role": "excluded"
+    },
+    {
+      "name": "description",
+      "dtype": "string",
+      "nullable": false,
+      "role": "leakage"
+    },
+    {
+      "name": "taster_name",
+      "dtype": "category",
+      "nullable": true,
+      "role": "leakage"
+    }
+  ],
+  "dropped_columns": [
+    "region_2",
+    "taster_twitter_handle"
+  ],
+  "forbidden_feature_roles": [
+    "leakage",
+    "identifier",
+    "excluded",
+    "target"
+  ],
+  "assumptions": [
+    "Prices are in USD as listed by WineEnthusiast at review time (data scraped June 2017).",
+    "points is the WineEnthusiast score; the source only publishes wines scored 80 or above.",
+    "vintage is the first year between 1980 and 2017 found in title; non-vintage wines have no year.",
+    "description and taster_name exist only after a wine is tasted, so they must never be model features."
+  ],
+  "constraints": [
+    "No fully duplicated rows.",
+    "No missing values in points, price, country or variety.",
+    "Every column listed above exists with the stated dtype; no extra columns."
+  ],
+  "observed": {
+    "row_count": 111537,
+    "columns": {
+      "points": {
+        "null_pct": 0.0,
+        "n_unique": 21,
+        "min": 80.0,
+        "max": 100.0
+      },
+      "price": {
+        "null_pct": 0.0,
+        "n_unique": 390,
+        "min": 4.0,
+        "max": 3300.0
+      },
+      "log_price": {
+        "null_pct": 0.0,
+        "n_unique": 390,
+        "min": 1.3862943611198906,
+        "max": 8.101677747454572
+      },
+      "vintage": {
+        "null_pct": 3.4643,
+        "n_unique": 37,
+        "min": 1980.0,
+        "max": 2017.0
+      },
+      "country": {
+        "null_pct": 0.0,
+        "n_unique": 42
+      },
+      "province": {
+        "null_pct": 0.0,
+        "n_unique": 422
+      },
+      "variety": {
+        "null_pct": 0.0,
+        "n_unique": 691
+      },
+      "region_1": {
+        "null_pct": 16.0996,
+        "n_unique": 1204
+      },
+      "winery": {
+        "null_pct": 0.0,
+        "n_unique": 15842
+      },
+      "title": {
+        "null_pct": 0.0,
+        "n_unique": 110582
+      },
+      "designation": {
+        "null_pct": 28.734,
+        "n_unique": 35749
+      },
+      "description": {
+        "null_pct": 0.0,
+        "n_unique": 111511
+      },
+      "taster_name": {
+        "null_pct": 20.8648,
+        "n_unique": 19
+      }
+    }
+  }
+}

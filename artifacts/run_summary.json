@@ -1,0 +1,80 @@
+{
+  "run_id": "20261118-093009-b17c94",
+  "status": "passed",
+  "started_at": "2026-11-18T09:30:09+00:00",
+  "finished_at": "2026-11-18T09:31:28+00:00",
+  "seconds": 78.2,
+  "raw_sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9",
+  "rows": {
+    "raw": 129971,
+    "clean": 111537,
+    "features": 111537,
+    "train": 89229,
+    "test": 22308
+  },
+  "checks": {
+    "preflight": {
+      "passed": true,
+      "message": "ok {\"raw_csv\": \"data/raw/winemag-data-130k-v2.csv\", \"sha256\": \"52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9\"}"
+    },
+    "contract": {
+      "passed": true,
+      "message": "ok {\"rows\": 111537, \"sha256\": \"52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9\"}"
+    },
+    "features": {
+      "passed": true,
+      "message": "ok {\"rows\": 111537, \"columns\": [\"log_price\", \"vintage\", \"vintage_missing\", \"country\", \"province\", \"variety\", \"region_1\"]}"
+    },
+    "model": {
+      "passed": true,
+      "message": "ok {\"selected\": \"v2\", \"mae\": 1.6895, \"baseline_mae\": 2.538, \"sample_predictions\": [88.02, 87.54, 86.15, 91.39, 86.26]}"
+    }
+  },
+  "selected": "v2",
+  "test_mae": {
+    "baseline": 2.538,
+    "v1": 1.8219,
+    "v2": 1.6895
+  },
+  "crews": {
+    "crew1": {
+      "seconds": 36.9,
+      "tokens": {
+        "total_tokens": 63384,
+        "prompt_tokens": 57408,
+        "cached_prompt_tokens": 16896,
+        "completion_tokens": 5976,
+        "reasoning_tokens": 0,
+        "cache_creation_tokens": 0,
+        "successful_requests": 36
+      },
+      "cost_usd": 0.01093
+    },
+    "crew2": {
+      "seconds": 40.8,
+      "tokens": {
+        "total_tokens": 28628,
+        "prompt_tokens": 24356,
+        "cached_prompt_tokens": 5632,
+        "completion_tokens": 4272,
+        "reasoning_tokens": 0,
+        "cache_creation_tokens": 0,
+        "successful_requests": 32
+      },
+      "cost_usd": 0.005794
+    }
+  },
+  "total_cost_usd": 0.016724,
+  "log": "logs/run_20261118-093009.log",
+  "artifacts": {
+    "clean_csv": "artifacts/analyst/clean_data.csv",
+    "contract_json": "artifacts/analyst/dataset_contract.json",
+    "features_csv": "artifacts/scientist/features.csv",
+    "metrics_json": "artifacts/scientist/metrics.json",
+    "model_pkl": "artifacts/scientist/model.pkl",
+    "evaluation_report": "artifacts/scientist/evaluation_report.md",
+    "model_card": "artifacts/scientist/model_card.md",
+    "insights": "artifacts/analyst/insights.md",
+    "eda_report": "artifacts/analyst/eda_report.html"
+  }
+}
