@@ -283,3 +283,8 @@ def country_label(country: Any) -> str:
 def sort_countries(countries: list[str]) -> list[str]:
     """English names ordered by their Hebrew name (alphabetical); untranslated ones last, A-Z."""
     return sorted(countries, key=lambda c: (c not in COUNTRY_HE, COUNTRY_HE.get(c, c)))
+
+
+def round_for_display(value: float, decimals: int = 2) -> float:
+    """Round for a table cell, turning -0.0 into 0.0 (R² of -0.0001 shows as 0.00, not -0.00)."""
+    return round(float(value), decimals) + 0.0

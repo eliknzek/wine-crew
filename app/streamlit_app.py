@@ -29,6 +29,10 @@ RTL_CSS = """
 .stApp, .stMarkdown, .stTabs, [data-testid="stSidebar"] { direction: rtl; text-align: right; }
 .stMarkdown ul, .stMarkdown ol, .stMarkdown li { direction: rtl; text-align: right; }
 [data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
+/* Dropdown lists open in a popover outside the widget, so target the dropdown itself. */
+[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] { direction: rtl; }
+[data-testid="stSelectboxVirtualDropdown"] [role="option"],
+[data-testid="stMultiSelectDropdown"] [role="option"] { direction: rtl; text-align: right; }
 .stMarkdown table { direction: rtl; }
 </style>
 """
@@ -152,8 +156,10 @@ with model_tab:
         st.subheader("השוואת מודלים")
         table = pd.DataFrame([
             {"מודל": name + (" (נבחר)" if name == metrics["selected"] else ""),
-             "CV MAE": m["cv"]["mae"], "MAE (test)": m["test"]["mae"],
-             "RMSE (test)": m["test"]["rmse"], "R² (test)": m["test"]["r2"]}
+             "CV MAE": ad.round_for_display(m["cv"]["mae"]),
+             "MAE (test)": ad.round_for_display(m["test"]["mae"]),
+             "RMSE (test)": ad.round_for_display(m["test"]["rmse"]),
+             "R² (test)": ad.round_for_display(m["test"]["r2"])}
             for name, m in metrics["models"].items()
         ])
         show_table_rtl(table, column_config={

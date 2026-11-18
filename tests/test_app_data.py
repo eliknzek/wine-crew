@@ -167,3 +167,19 @@ def test_countries_sorted_by_hebrew_name():
     assert ordered == ["Italy", "Argentina", "US", "Israel", "France", "Atlantis"]
     hebrew = [ad.COUNTRY_HE[c] for c in ad.sort_countries(list(ad.COUNTRY_HE))]
     assert hebrew == sorted(hebrew)
+
+
+def test_round_for_display_has_no_negative_zero():
+    assert str(ad.round_for_display(-0.0001)) == "0.0" and f"{ad.round_for_display(-0.0001):.2f}" == "0.00"
+    assert ad.round_for_display(0.5183) == 0.52 and ad.round_for_display(-0.126) == -0.13
+
+
+def test_theme_uses_rubik():
+    import tomllib
+
+    from wine_crew.config import REPO_ROOT
+
+    theme = tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())["theme"]
+    for key in ("font", "headingFont"):
+        assert theme[key].startswith("Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700")
+    assert "codeFont" not in theme                   # code and the run id stay monospace

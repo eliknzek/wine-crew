@@ -123,3 +123,9 @@ def test_menus_are_sorted_and_send_english_names(app):
     regions = app.selectbox(key="form_region").options
     assert regions[0] == ad.UNKNOWN and regions[1:] == sorted(regions[1:])
     assert app.multiselect(key="value_varieties").options == sorted(app.multiselect(key="value_varieties").options)
+
+
+def test_model_table_shows_zero_not_negative_zero(app):
+    table = next(d for d in app.dataframe if "מודל" in d.value.columns).value
+    baseline = table[table["מודל"] == "baseline"].iloc[0]
+    assert f"{baseline['R² (test)']:.2f}" == "0.00"
