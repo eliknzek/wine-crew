@@ -401,6 +401,13 @@ def signed(value: float) -> str:
     return f"\u2066{float(value):+.1f}\u2069"
 
 
+def signed_html(value: float) -> str:
+    """'+9.1' inside an HTML <bdi dir="ltr"> element as well: an element-level isolate keeps the
+    sign before the number in Hebrew text even where the Unicode isolate characters alone are not
+    honored (seen on mobile next to "כלומר"). For text rendered as HTML."""
+    return f'<bdi dir="ltr">{signed(value)}</bdi>'
+
+
 def model_mae(metrics: dict[str, Any]) -> float:
     """Test MAE of the selected model."""
     return float(metrics["models"][metrics["selected"]]["test"]["mae"])
@@ -646,3 +653,36 @@ def ranking_csv(df: pd.DataFrame) -> bytes:
         value_score=df["value_score"].round(2),
     )
     return out[list(CSV_COLUMNS)].rename(columns=CSV_COLUMNS).to_csv(index=False).encode("utf-8-sig")
+
+
+# --------------------------------------------------------------------------- table display
+
+def short_title(title: Any, max_chars: int = 40) -> str:
+    """A long wine name cut at a word boundary with "…", for table cells (the grid cannot wrap
+    text). The full name stays in the wine card, the top-3 cards and the CSV."""
+    text = str(title)
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars].rsplit(" ", 1)[0].rstrip(" ,-–(")
+    return (cut or text[:max_chars]) + "…"
+
+
+WINE_PROPS = [("country", "מדינה"), ("province", "מחוז"), ("region_1", "אזור"), ("variety", "זן"),
+              ("vintage", "בציר")]
+
+
+def wine_props(wine) -> list[tuple[str, str]]:
+    """(Hebrew label, display value) for the wine card's property list; missing values read 'לא ידוע'."""
+    out = []
+    for key, label in WINE_PROPS:
+        value = wine[key]
+        if value is None or (not isinstance(value, str) and pd.isna(value)) or value == "":
+            text = UNKNOWN
+        elif key == "country":
+            text = country_label(value)
+        elif key == "vintage":
+            text = str(int(value))
+        else:
+            text = str(value)
+        out.append((label, text))
+    return out

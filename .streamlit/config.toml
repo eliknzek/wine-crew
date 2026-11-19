@@ -1,8 +1,25 @@
-# Theme for the Streamlit app (read from the repo root locally and on Streamlit Cloud).
+# Theme and server settings for the Streamlit app (read from the repo root locally and on
+# Streamlit Community Cloud).
+
+[server]
+# Serves app/static/ (next to app/streamlit_app.py) at app/static/..., used by app/style.css
+# for the hero image. A file URL instead of base64 keeps the CSS small on every rerun.
+enableStaticServing = true
+
 [theme]
-# Rubik from Google Fonts for body text and headings; code (and the run id, shown as code)
-# keeps Streamlit's default monospace codeFont.
+# Wine cellar palette. Gold (#C9A227) is decoration only (dividers, card borders), never text:
+# on the cream background its contrast is about 2.2:1. Contrast checks: tests/test_app_text.py.
+backgroundColor = "#F7F4EF"            # cream
+secondaryBackgroundColor = "#EFE8DD"   # inputs, code, expanders
+primaryColor = "#6E0F1A"               # deep wine red (buttons, prices, headings); 11:1 on cream
+textColor = "#1F1A17"                  # near black
+borderColor = "#E2D8C8"
+linkColor = "#6E0F1A"
+chartCategoricalColors = ["#7B2D43", "#C9A227", "#5E6B4E", "#8C6A4F", "#3E4A61"]
+
+# Body text in Rubik, headings in Frank Ruhl Libre (both from Google Fonts, both with Hebrew);
+# code (and the run id, shown as code) keeps Streamlit's default monospace codeFont.
 font = "Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap"
-headingFont = "Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap"
+headingFont = "Frank Ruhl Libre:https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&display=swap"
 baseFontWeight = 400
-headingFontWeights = [700, 700, 700, 500, 500, 500]   # only the loaded weights (400/500/700)
+headingFontWeights = [700, 700, 700, 500, 500, 500]   # only the loaded weights (500/700)

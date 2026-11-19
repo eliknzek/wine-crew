@@ -174,14 +174,15 @@ def test_round_for_display_has_no_negative_zero():
     assert ad.round_for_display(0.5183) == 0.52 and ad.round_for_display(-0.126) == -0.13
 
 
-def test_theme_uses_rubik():
+def test_theme_fonts():
     import tomllib
 
     from wine_crew.config import REPO_ROOT
 
     theme = tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())["theme"]
-    for key in ("font", "headingFont"):
-        assert theme[key].startswith("Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700")
+    assert theme["font"].startswith("Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700")
+    assert theme["headingFont"].startswith(
+        "Frank Ruhl Libre:https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700")
     assert "codeFont" not in theme                   # code and the run id stay monospace
 
 

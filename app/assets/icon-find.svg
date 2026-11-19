@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Magnifying glass (find a value wine), line icon drawn for wine-crew. -->
+  <g fill="none" stroke="#6E0F1A" stroke-width="2" stroke-linecap="round">
+    <circle cx="20" cy="20" r="12"/><path d="M29 29 L42 42"/><path d="M14 16 C15 13 17 12 20 11.5"/>
+  </g>
+</svg>

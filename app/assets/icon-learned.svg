@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Open book (what we learned), line icon drawn for wine-crew. -->
+  <g fill="none" stroke="#6E0F1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 13 C19 9 12 9 6 11 V37 C12 35 19 35 24 39 C29 35 36 35 42 37 V11 C36 9 29 9 24 13 Z"/>
+    <path d="M24 13 V39"/><path d="M11 18 C14 17 17 17 20 18"/><path d="M28 18 C31 17 34 17 37 18"/>
+  </g>
+</svg>

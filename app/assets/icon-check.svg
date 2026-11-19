@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Wine glass (check a wine), line icon drawn for wine-crew. -->
+  <g fill="none" stroke="#6E0F1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 6 H34 C35 18 31 26 24 27 C17 26 13 18 14 6 Z"/>
+    <path d="M15 15 H33"/><path d="M24 27 V40"/><path d="M16 42 H32"/>
+  </g>
+</svg>

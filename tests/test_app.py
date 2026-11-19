@@ -1,5 +1,6 @@
 """The Streamlit app loads and its prediction form works (streamlit.testing.v1.AppTest)."""
 
+import html
 from pathlib import Path
 
 import pytest
@@ -150,7 +151,8 @@ def test_title_is_hebrew_and_page_title_stays(app):
     assert app.caption[0].value.startswith("wine-crew · כל המספרים")
     source = open(APP, encoding="utf-8").read()
     assert 'page_title="wine-crew"' in source
-    assert '[data-testid="stHeading"]' in source and '[data-testid="stCaptionContainer"]' in source
+    css = (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")       # RTL rules live in style.css
+    assert '[data-testid="stHeading"]' in css and '[data-testid="stCaptionContainer"]' in css
 
 
 def test_analysis_tab_shows_hebrew_country_names(app):
@@ -238,7 +240,8 @@ def test_every_former_item_is_still_shown(app):
 
 
 def test_intro_above_tabs_and_one_line_per_tab(app):
-    intro = list(app.main.children.values())[2]                  # title, caption, then the intro line
+    hero = list(app.main.children.values())[0]                   # the hero band comes first
+    intro = list(hero.children.values())[2]                       # title, caption, then the intro line
     assert all(f"**{label}**" in intro.value for label in TABS)
     for tab in app.tabs:
         assert tab.markdown[0].value.strip()                                     # first thing in each tab
@@ -315,12 +318,17 @@ def test_rare_price_note_after_prediction(app):
 
 
 def test_similar_wines_after_prediction(app):
+    """'אולי תאהבו גם': one card per wine from similar_wines, in the same order, with the same data."""
     tab = _predict(app)
-    table = next(d for d in tab.dataframe if "title" in d.value.columns).value
-    assert 1 <= len(table) <= 5
-    assert set(table["country"]) == {"ארצות הברית (US)"} and set(table["variety"]) == {"Pinot Noir"}
-    assert table["price"].between(25 / 1.5, 25 * 1.5).all()
-    assert table["value_score"].is_monotonic_decreasing
+    assert any(h.value == "אולי תאהבו גם" for h in tab.subheader)
+    expected, _levels = ad.similar_wines(ad.load_ranking(CONFIG), "US", "Pinot Noir", 25.0)
+    cards = _cards(app, "בדוק יין", "similar_wine_")
+    assert 1 <= len(cards) == len(expected) <= 5
+    for card, wine in zip(cards, expected.itertuples()):
+        text = " ".join(m.value for m in card.markdown)
+        assert html.escape(wine.title) in text and ad.money(wine.price) in text
+        assert ad.score_text(wine.points) in text and ad.signed(wine.value_score) in text
+    assert not any("title" in d.value.columns for d in tab.dataframe)     # cards, not a table
 
 
 def test_wine_card_after_selecting_a_row(app):
@@ -333,13 +341,103 @@ def test_wine_card_after_selecting_a_row(app):
     first = ad.filter_ranking(ranking, top=50).iloc[0]
     card = _tab(app, "מצא יין שווה")
     text = [m.value for m in card.markdown]
-    assert f"**{first['title']}**" in text
+    header = next(h.proto.body for h in card.get("html") if "wine-card-title" in h.proto.body)
+    assert f'<div class="wine-card-title">{html.escape(first["title"])}</div>' in header
+    for label, value in ad.wine_props(first):                      # every property, label and value
+        assert f"<dt>{label}</dt><dd>{html.escape(value)}</dd>" in header
+    assert 'class="wine-price">' + ad.money(first["price"]) in header
+    assert html.escape(ad.score_text(first["points"])) in header and ad.signed(first["value_score"]) in header
+    assert f"ניקוד צפוי: {first['predicted']:.1f}" in header
     assert any(ad.value_sentence(first["value_score"]) in t for t in text)
+    # The signed number next to the value sentence is isolated, in the card and in the example
+    # caption under the table (otherwise the sign jumps to the wrong side in Hebrew text).
+    isolated = f"ציון שווי {ad.signed_html(first['value_score'])}, כלומר {ad.value_sentence(first['value_score'])}."
+    assert isolated in text
+    assert any(isolated in c.value for c in card.caption)
     pct, count = ad.variety_percentile(ranking, first["variety"], first["value_score"])
     assert ad.variety_rank_sentence(pct, first["variety"], count) in text
-    assert any(ad.score_text(first["points"]) in t for t in text)
 
 
 def test_csv_download_button(app):
     buttons = _tab(app, "מצא יין שווה").get("download_button")
     assert [b.proto.label for b in buttons] == ["הורדת הרשימה (CSV)"]
+
+
+def _cards(app, tab_label="מצא יין שווה", prefix="top_wine_"):
+    blocks = []
+
+    def walk(node):
+        for child in getattr(node, "children", {}).values():
+            key = getattr(getattr(child, "proto", None), "id", "") or ""
+            if prefix in key:
+                blocks.append(child)
+            walk(child)
+
+    walk(_tab(app, tab_label))
+    return blocks
+
+
+def test_guide_has_four_arches(app):
+    guide = [h.proto.body for h in app.get("html") if "wine-guide" in h.proto.body and "<style>" not in h.proto.body]
+    assert len(guide) == 1
+    body = guide[0]
+    assert body.count('class="wine-arch"') == 4
+    for icon, title in (("icon-find", "מצא יין שווה"), ("icon-check", "בדוק יין"),
+                        ("icon-learned", "מה למדנו"), ("icon-how", "איך זה עובד")):
+        assert f"wine-arch-icon {icon}" in body and f'<div class="wine-arch-title">{title}</div>' in body
+    assert "<button" not in body and "<a " not in body                     # explanation only
+
+
+def test_top3_cards_match_the_first_table_rows(app):
+    cards = _cards(app)
+    first = ad.filter_ranking(ad.load_ranking(CONFIG), top=50).head(3)
+    assert len(cards) == 3
+    for card, wine in zip(cards, first.itertuples()):
+        text = " ".join(m.value for m in card.markdown)
+        assert html.escape(wine.title) in text
+        assert ad.money(wine.price) in text and 'class="wine-price"' in text
+        assert ad.score_text(wine.points) in text and ad.signed(wine.value_score) in text
+
+
+def _pair_with_two_wines():
+    ranking = ad.load_ranking(CONFIG)
+    sizes = ranking.groupby(["country", "variety"]).size()
+    country, variety = sizes[sizes == 2].index[0]
+    return ranking, country, variety
+
+
+def test_fewer_cards_when_the_filter_returns_fewer_wines(app):
+    ranking, country, variety = _pair_with_two_wines()
+    app.multiselect(key="value_countries").select(country)
+    app.multiselect(key="value_varieties").select(variety).run()
+    assert not app.exception, app.exception
+    cards = _cards(app)
+    expected = ad.filter_ranking(ranking, [country], [variety], top=50)
+    assert len(cards) == len(expected) == 2
+    assert all(html.escape(w) in " ".join(m.value for m in c.markdown) for c, w in zip(cards, expected["title"]))
+    cheapest = float(expected["price"].min())
+    app.number_input(key="value_price_max").set_value(max(4.0, cheapest - 1)).run()
+    assert not app.exception, app.exception
+    assert _cards(app) == []
+
+
+def test_footer(app):
+    footer = [h for h in app.get("html") if "<footer" in h.proto.body]
+    assert len(footer) == 1
+    body = footer[0].proto.body
+    assert "אלי ומתנאל · פרויקט קורס" in body
+    assert 'href="https://github.com/eliknzek/wine-crew"' in body
+    assert "נבנה עם CrewAI ו-Streamlit" in body
+
+
+def test_css_is_injected_once_from_style_css(app):
+    styles = [h for h in app.get("html") if "<style>" in h.proto.body]
+    assert len(styles) == 1
+    css = styles[0].proto.body
+    assert 'url("app/static/hero-vineyard.webp")' in css and "data:image/svg+xml," in css
+    assert "{{" not in css and "base64" not in css
+    # Streamlit sanitizes st.html with DOMPurify, which drops a whole <style> whose text has
+    # anything tag-like ("<key>" in a comment did that), so the stylesheet must have no "<".
+    assert "<" not in (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")
+    source = open(APP, encoding="utf-8").read()
+    assert "<style" not in source.replace('f"<style>{css}</style>"', "")   # no other CSS in the code

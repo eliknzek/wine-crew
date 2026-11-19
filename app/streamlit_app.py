@@ -7,6 +7,7 @@ key. Run with:
 
 from __future__ import annotations
 
+import html
 import sys
 from pathlib import Path
 
@@ -38,23 +39,28 @@ from wine_crew.config import load_config, resolve_path  # noqa: E402
 
 st.set_page_config(page_title="wine-crew", page_icon="🍷", layout="wide")
 
-RTL_CSS = """
-<style>
-.stApp, .stMarkdown, .stTabs, [data-testid="stSidebar"] { direction: rtl; text-align: right; }
-.stMarkdown ul, .stMarkdown ol, .stMarkdown li { direction: rtl; text-align: right; }
-/* Headings and captions: set the direction explicitly, so a line that starts with Latin text
-   (e.g. "wine-crew · ...") is still laid out right-to-left. */
-[data-testid="stHeading"], [data-testid="stHeading"] h1, [data-testid="stHeading"] h2,
-[data-testid="stHeading"] h3, [data-testid="stCaptionContainer"] { direction: rtl; text-align: right; }
-[data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
-/* Dropdown lists open in a popover outside the widget, so target the dropdown itself. */
-[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] { direction: rtl; }
-[data-testid="stSelectboxVirtualDropdown"] [role="option"],
-[data-testid="stMultiSelectDropdown"] [role="option"] { direction: rtl; text-align: right; }
-.stMarkdown table { direction: rtl; }
-</style>
-"""
-st.html(RTL_CSS)
+STYLE_FILE = APP_DIR / "style.css"
+ASSETS = APP_DIR / "assets"
+
+
+@st.cache_resource
+def load_style(css_fingerprint: tuple) -> str:  # noqa: ARG001 - cache key only
+    """app/style.css with each {{SVG:name}} replaced by app/assets/<name>.svg as a data URI.
+    The SVGs are small line drawings; the hero photo is served as a static file (app/static/),
+    not inlined, so the CSS stays small on every rerun."""
+    import re
+    from urllib.parse import quote
+
+    def svg(match):
+        text = (ASSETS / f"{match.group(1)}.svg").read_text(encoding="utf-8")
+        return "data:image/svg+xml," + quote(text)
+
+    css = re.sub(r"\{\{SVG:([a-z0-9-]+)\}\}", svg, STYLE_FILE.read_text(encoding="utf-8"))
+    return f"<style>{css}</style>"
+
+
+# The only CSS injection in the app.
+st.html(load_style(ad.file_fingerprint([STYLE_FILE, *sorted(ASSETS.glob("*.svg"))])))
 
 TABS = ["מצא יין שווה", "בדוק יין", "מה למדנו", "איך זה עובד"]
 INTRO = ("האתר מנבא את הניקוד של יין לפי המחיר, המקור, הזן והבציר, ומוצא יינות שקיבלו ניקוד גבוה "
@@ -67,6 +73,21 @@ TAB_INTRO = {
     "learned": "מה למדנו מביקורות היין עצמן: הממצאים המרכזיים והגרפים שמהם הם עולים.",
     "how": "איך הנתונים עוברים מהקובץ הגולמי למודל, מה נבדק בדרך, ועד כמה המודל מדויק.",
 }
+DIVIDER = '<div class="wine-divider" role="presentation"></div>'
+FOOTER = ('<footer class="wine-footer">אלי ומתנאל · פרויקט קורס · '
+          '<a href="https://github.com/eliknzek/wine-crew" target="_blank" rel="noopener">'
+          'github.com/eliknzek/wine-crew</a> · נבנה עם CrewAI ו-Streamlit</footer>')
+TITLE_HELP = "שמות ארוכים מקוצרים בטבלה. השם המלא בכרטיס היין (בחרו שורה) ובקובץ ה-CSV."
+GUIDE_ITEMS = [   # (icon class, tab, one short sentence); explanation only, not buttons
+    ("icon-find", "מצא יין שווה", "בוחרים תקציב ומקבלים את היינות שקיבלו יותר ממה שצפוי במחיר שלהם."),
+    ("icon-check", "בדוק יין", "בוחרים מקור, זן, מחיר ובציר, ורואים איזה ניקוד צפוי ליין כזה."),
+    ("icon-learned", "מה למדנו", "הממצאים מתוך ביקורות היין, עם הגרפים שמראים אותם."),
+    ("icon-how", "איך זה עובד", "הסוכנים, הבדיקות בדרך, ועד כמה המודל מדויק."),
+]
+GUIDE = '<div class="wine-guide">' + "".join(
+    f'<div class="wine-arch"><div class="wine-arch-icon {icon}" role="presentation"></div>'
+    f'<div class="wine-arch-title">{title}</div><p>{text}</p></div>'
+    for icon, title, text in GUIDE_ITEMS) + "</div>"
 CHART_TITLE = "הניקוד הצפוי ליין כזה לפי מחיר"   # shown as text above the chart (RTL-safe)
 CREW_TITLES = {"crew1": "Crew 1: Data Analyst", "crew2": "Crew 2: Data Scientist"}
 CHECK_NAMES = {"preflight": "בדיקה מקדימה (קובץ גולמי)", "contract": "שער 1 (חוזה נתונים)",
@@ -134,6 +155,29 @@ def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs
                         **kwargs)
 
 
+def wine_cards(wines: pd.DataFrame, key_prefix: str) -> None:
+    """Small cards side by side (one per column; stacked on narrow screens): full name, price in
+    wine red, score with its word and the signed value score. Data as given, no new computation."""
+    for col, (i, wine) in zip(st.columns(len(wines)), enumerate(wines.itertuples())):
+        with col, st.container(border=True, key=f"{key_prefix}_{i}"):
+            st.markdown(f'<span class="wine-name">{html.escape(wine.title)}</span>', unsafe_allow_html=True)
+            st.markdown(f'<span class="wine-price">{ad.money(wine.price)}</span>', unsafe_allow_html=True)
+            st.markdown(f"{ad.score_text(wine.points)} · ציון שווי {ad.signed_html(wine.value_score)}",
+                        unsafe_allow_html=True)
+
+
+def wine_card_html(wine) -> str:
+    """The product-style header of the wine card: big name, two-column properties, highlight row."""
+    props = "".join(f"<div><dt>{html.escape(label)}</dt><dd>{html.escape(value)}</dd></div>"
+                    for label, value in ad.wine_props(wine))
+    return (f'<div class="wine-card-title">{html.escape(wine["title"])}</div>'
+            f'<dl class="wine-props">{props}</dl>'
+            f'<div class="wine-highlight"><span class="wine-price">{ad.money(wine["price"])}</span>'
+            f'<span>ניקוד בפועל: <strong>{html.escape(ad.score_text(wine["points"]))}</strong></span>'
+            f'<span>ניקוד צפוי: {wine["predicted"]:.1f}</span>'
+            f'<span>ציון שווי <strong>{ad.signed_html(wine["value_score"])}</strong></span></div>')
+
+
 def _missing(name: str) -> None:
     st.warning(f"הקובץ {name} לא נמצא. הריצו `python -m wine_crew.main` כדי לייצר את התוצרים.")
 
@@ -146,9 +190,12 @@ ranking = _ranking(ranking_fp)
 band = _band(ranking_fp)
 metrics = data["metrics"]
 
-st.title("🍷 ניקוד יינות ויינות ששווים את מחירם")
-st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
-st.markdown(INTRO)
+with st.container(key="hero"):
+    st.title("🍷 ניקוד יינות ויינות ששווים את מחירם")
+    st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
+    st.markdown(INTRO)
+    st.html(DIVIDER)
+st.html(GUIDE)
 
 value_tab, predict_tab, learned_tab, how_tab = st.tabs(TABS)
 
@@ -182,15 +229,22 @@ with value_tab:
             st.caption(f"{len(result)} יינות מוצגים · {ad.accuracy_sentence(metrics)}.")
         else:
             st.caption(f"{len(result)} יינות מוצגים")
+        top3 = result.head(3)   # the same rows as the top of the table below, no new computation
+        if len(top3):
+            with st.container(key="top3"):
+                st.subheader("3 היינות השווים ביותר")
+                wine_cards(top3, "top_wine")
         shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
                               country=result["country"].map(ad.country_label),
-                              label=result["points"].map(ad.score_label))
+                              label=result["points"].map(ad.score_label),
+                              title=result["title"].map(ad.short_title))
         event = show_table_rtl(
             shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
                    "label", "predicted", "value_score"]],
             key="value_table", on_select="rerun", selection_mode="single-row",
             column_config={
-                "rank": "דירוג כללי", "title": "יין", "country": "מדינה", "province": "מחוז",
+                "rank": "דירוג כללי", "title": st.column_config.TextColumn("יין", help=TITLE_HELP),
+                "country": "מדינה", "province": "מחוז",
                 "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),
                 "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
                 "points": "ניקוד", "label": "דרגה",
@@ -201,8 +255,8 @@ with value_tab:
             })
         if len(result):
             first = result.iloc[0]
-            st.caption(f"לדוגמה, ליין הראשון ציון שווי {ad.signed(first['value_score'])}, כלומר "
-                       f"{ad.value_sentence(first['value_score'])}.")
+            st.caption(f"לדוגמה, ליין הראשון ציון שווי {ad.signed_html(first['value_score'])}, כלומר "
+                       f"{ad.value_sentence(first['value_score'])}.", unsafe_allow_html=True)
             st.download_button("הורדת הרשימה (CSV)", ad.ranking_csv(result), file_name="value_wines.csv",
                                mime="text/csv", key="value_csv")
             rows = event.selection.rows if event is not None else []
@@ -211,17 +265,10 @@ with value_tab:
             else:
                 wine = result.iloc[rows[0]]
                 pct, count = ad.variety_percentile(ranking, wine["variety"], wine["value_score"])
-                region = wine["region_1"] if isinstance(wine["region_1"], str) else ad.UNKNOWN
-                vintage_text = "" if pd.isna(wine["vintage"]) else str(int(wine["vintage"]))
                 with st.container(border=True, key="wine_card"):
-                    st.markdown(f"**{wine['title']}**")
-                    st.markdown(
-                        f"{ad.country_label(wine['country'])} · {wine['province']} · {region} · "
-                        f"{wine['variety']} · בציר {vintage_text or ad.UNKNOWN} · {ad.money(wine['price'])}")
-                    st.markdown(f"ניקוד בפועל: **{ad.score_text(wine['points'])}** · "
-                                f"ניקוד צפוי: {wine['predicted']:.1f}")
-                    st.markdown(f"ציון שווי {ad.signed(wine['value_score'])}, כלומר "
-                                f"{ad.value_sentence(wine['value_score'])}.")
+                    st.html(wine_card_html(wine))
+                    st.markdown(f"ציון שווי {ad.signed_html(wine['value_score'])}, כלומר "
+                                f"{ad.value_sentence(wine['value_score'])}.", unsafe_allow_html=True)
                     st.markdown(ad.variety_rank_sentence(pct, wine["variety"], count))
 
 # --------------------------------------------------------------------------- check a wine
@@ -285,27 +332,13 @@ with predict_tab:
                 if ad.is_rare_price(price, (low, high)):
                     st.caption(ad.RARE_PRICE_NOTE)
 
-                st.subheader("יינות שכדאי להכיר")
+                st.subheader("אולי תאהבו גם")
                 similar, levels = ad.similar_wines(ranking, country, variety, price)
                 st.caption(f"עד 5 יינות במחיר בין {ad.money(price / 1.5)} ל-{ad.money(price * 1.5)}, "
                            "עם ציון השווי הגבוה ביותר.")
                 if len(similar):
-                    shown = similar.assign(
-                        vintage=similar["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
-                        country=similar["country"].map(ad.country_label),
-                        label=similar["points"].map(ad.score_label))
-                    show_table_rtl(
-                        shown[["title", "country", "variety", "vintage", "price", "points", "label",
-                               "value_score"]],
-                        key="similar_table",
-                        column_config={
-                            "title": "יין", "country": "מדינה", "variety": "זן",
-                            "vintage": st.column_config.TextColumn("בציר"),
-                            "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
-                            "points": "ניקוד", "label": "דרגה",
-                            "value_score": st.column_config.NumberColumn("ציון שווי", format="%+.1f",
-                                                                         help=ad.GLOSSARY["ציון שווי"]),
-                        })
+                    with st.container(key="similar_cards"):
+                        wine_cards(similar, "similar_wine")
                 note = ad.similar_note(levels, country, variety)
                 if note:
                     st.caption(note)
@@ -418,3 +451,5 @@ with how_tab:
     if data["evaluation_report"]:
         with st.expander("דוח ההערכה המלא (evaluation_report.md)"):
             st.markdown(data["evaluation_report"])
+
+st.html(FOOTER)
