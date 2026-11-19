@@ -88,6 +88,17 @@ GUIDE = '<div class="wine-guide">' + "".join(
     f'<div class="wine-arch"><div class="wine-arch-icon {icon}" role="presentation"></div>'
     f'<div class="wine-arch-title">{title}</div><p>{text}</p></div>'
     for icon, title, text in GUIDE_ITEMS) + "</div>"
+# Decorative photo strips at the top of two tabs (no text on them; images in app/static/, set in
+# style.css). Only "בדוק יין" and "מה למדנו": the first tab is right under the hero, and the
+# technical tab does not need decoration.
+BANDS = {
+    "predict": '<div class="tab-band band-check" role="img" aria-label="יין אדום נמזג לכוס"></div>',
+    "learned": '<div class="tab-band band-learned" role="img" aria-label="אשכול ענבים על הגפן"></div>',
+}
+NO_RESULTS = ('<div class="no-results"><div class="no-results-text">'
+              '<div class="no-results-title">לא נמצאו יינות</div>'
+              '<p>נסו להגדיל את התקציב, או להסיר מדינה או זן.</p></div>'
+              '<div class="no-results-img" role="img" aria-label="כוס יין על חבית בכרם"></div></div>')
 CHART_TITLE = "הניקוד הצפוי ליין כזה לפי מחיר"   # shown as text above the chart (RTL-safe)
 CREW_TITLES = {"crew1": "Crew 1: Data Analyst", "crew2": "Crew 2: Data Scientist"}
 CHECK_NAMES = {"preflight": "בדיקה מקדימה (קובץ גולמי)", "contract": "שער 1 (חוזה נתונים)",
@@ -234,26 +245,29 @@ with value_tab:
             with st.container(key="top3"):
                 st.subheader("3 היינות השווים ביותר")
                 wine_cards(top3, "top_wine")
-        shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
-                              country=result["country"].map(ad.country_label),
-                              label=result["points"].map(ad.score_label),
-                              title=result["title"].map(ad.short_title))
-        event = show_table_rtl(
-            shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
-                   "label", "predicted", "value_score"]],
-            key="value_table", on_select="rerun", selection_mode="single-row",
-            column_config={
-                "rank": "דירוג כללי", "title": st.column_config.TextColumn("יין", help=TITLE_HELP),
-                "country": "מדינה", "province": "מחוז",
-                "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),
-                "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
-                "points": "ניקוד", "label": "דרגה",
-                "predicted": st.column_config.NumberColumn("ניקוד צפוי", format="%.1f",
-                                                           help=ad.GLOSSARY["ניקוד צפוי"]),
-                "value_score": st.column_config.NumberColumn("ציון שווי", format="%+.1f",
-                                                             help=ad.GLOSSARY["ציון שווי"]),
-            })
-        if len(result):
+        if not len(result):
+            # Display only: the filter and the result are unchanged; no empty table.
+            st.html(NO_RESULTS)
+        else:
+            shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
+                                  country=result["country"].map(ad.country_label),
+                                  label=result["points"].map(ad.score_label),
+                                  title=result["title"].map(ad.short_title))
+            event = show_table_rtl(
+                shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
+                       "label", "predicted", "value_score"]],
+                key="value_table", on_select="rerun", selection_mode="single-row",
+                column_config={
+                    "rank": "דירוג כללי", "title": st.column_config.TextColumn("יין", help=TITLE_HELP),
+                    "country": "מדינה", "province": "מחוז",
+                    "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),
+                    "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
+                    "points": "ניקוד", "label": "דרגה",
+                    "predicted": st.column_config.NumberColumn("ניקוד צפוי", format="%.1f",
+                                                               help=ad.GLOSSARY["ניקוד צפוי"]),
+                    "value_score": st.column_config.NumberColumn("ציון שווי", format="%+.1f",
+                                                                 help=ad.GLOSSARY["ציון שווי"]),
+                })
             first = result.iloc[0]
             st.caption(f"לדוגמה, ליין הראשון ציון שווי {ad.signed_html(first['value_score'])}, כלומר "
                        f"{ad.value_sentence(first['value_score'])}.", unsafe_allow_html=True)
@@ -273,6 +287,7 @@ with value_tab:
 
 # --------------------------------------------------------------------------- check a wine
 with predict_tab:
+    st.html(BANDS["predict"])
     st.markdown(TAB_INTRO["predict"])
     model = _model(ad.file_fingerprint([ad.model_file(config)]))
     if model is None or metrics is None:
@@ -345,6 +360,7 @@ with predict_tab:
 
 # --------------------------------------------------------------------------- what we learned
 with learned_tab:
+    st.html(BANDS["learned"])
     st.markdown(TAB_INTRO["learned"])
     if data["insights"]:
         st.markdown(ad.localize_countries(data["insights"]))

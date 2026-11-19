@@ -434,10 +434,40 @@ def test_css_is_injected_once_from_style_css(app):
     styles = [h for h in app.get("html") if "<style>" in h.proto.body]
     assert len(styles) == 1
     css = styles[0].proto.body
-    assert 'url("app/static/hero-vineyard.webp")' in css and "data:image/svg+xml," in css
+    assert 'url("app/static/hero-cellar-barrels.webp")' in css and "data:image/svg+xml," in css
     assert "{{" not in css and "base64" not in css
     # Streamlit sanitizes st.html with DOMPurify, which drops a whole <style> whose text has
     # anything tag-like ("<key>" in a comment did that), so the stylesheet must have no "<".
     assert "<" not in (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")
     source = open(APP, encoding="utf-8").read()
     assert "<style" not in source.replace('f"<style>{css}</style>"', "")   # no other CSS in the code
+
+
+def _html_in(tab):
+    return [h.proto.body for h in tab.get("html")]
+
+
+def test_photo_strips_only_in_two_tabs(app):
+    expected = {"מצא יין שווה": None, "בדוק יין": "band-check", "מה למדנו": "band-learned", "איך זה עובד": None}
+    for label, band in expected.items():
+        bands = [b for b in _html_in(_tab(app, label)) if "tab-band" in b]
+        if band is None:
+            assert bands == [], label
+        else:
+            assert len(bands) == 1 and band in bands[0] and 'role="img"' in bands[0], label
+
+
+def test_no_results_state(app):
+    find = _tab(app, "מצא יין שווה")
+    assert not any("no-results" in b for b in _html_in(find))           # default: wines found
+    ranking, country, variety = _pair_with_two_wines()
+    cheapest = float(ad.filter_ranking(ranking, [country], [variety], top=50)["price"].min())
+    app.multiselect(key="value_countries").select(country)
+    app.multiselect(key="value_varieties").select(variety)
+    app.number_input(key="value_price_max").set_value(max(4.0, cheapest - 1)).run()
+    assert not app.exception, app.exception
+    find = _tab(app, "מצא יין שווה")
+    block = [b for b in _html_in(find) if "no-results" in b]
+    assert len(block) == 1 and "לא נמצאו יינות" in block[0] and "no-results-img" in block[0]
+    assert not any("value_score" in d.value.columns for d in find.dataframe)   # no empty table
+    assert not find.get("download_button")
