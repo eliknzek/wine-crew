@@ -17,6 +17,7 @@ python scripts/download_data.py [--force]   # raw CSV -> data/raw/, prints sha25
 pytest                                      # all tests
 pytest tests/test_file.py::test_name        # single test
 python -m wine_crew.main                    # run the whole Flow; exit 1 if a gate stops it
+python -m wine_crew.main --demo-fail contract   # demo a controlled stop (contract|features|model); --raw PATH for another raw file
 streamlit run app/streamlit_app.py          # the app (reads artifacts/ only, no API key)
 ```
 
@@ -33,7 +34,7 @@ To change dependencies, edit `requirements.in` and re-lock with `uv pip compile 
 ## Architecture notes
 
 - Thresholds, paths and hyperparameters live in `config.yaml`. Read them from there rather than hard-coding them.
-- Gates in `checks.py` are pure Python and independent of the LLM. A failure raises `FlowCheckError`, and the Flow stops cleanly: it logs the check, marks `artifacts/run_summary.json` as failed, and exits with code 1.
+- Gates in `checks.py` are pure Python and independent of the LLM. A failure raises `FlowCheckError`, and the Flow stops cleanly: it logs the check, writes the failed summary to `logs/run_<ts>_summary.json`, leaves `artifacts/` exactly as it was, and exits with code 1. Crews write into `build/runs/<run_id>/` (`paths.staging_root`); only when every gate passed does `promote` move `analyst/` and `scientist/` into `artifacts/` (rolling back both on any failure) and write `artifacts/run_summary.json`.
 - The Streamlit app only reads `artifacts/` and `model.pkl`. It never runs the Flow and needs no API key. It must not import crewai or matplotlib (keep `app_data.py` light), and it adds `src/` to `sys.path` itself so it runs without installing the package. Form options come from the model's learned categories (`group_rare.keep_`), and the value screen reads `artifacts/scientist/value_ranking.csv`. Streamlit reloads only modules under `app/`, so `app/code_reload.py` evicts `wine_crew.*` when `src/wine_crew` changes; cached loaders take a file fingerprint (mtime, size) as their key, never an argument starting with `_` (Streamlit does not hash those).
 
 ## Dataset contract (docs/dataset_contract.json)

@@ -62,6 +62,27 @@ streamlit run app/streamlit_app.py
 
 קישור לאפליקציה: https://wine-crew.streamlit.app/
 
+## ריצה בטוחה והדגמת כשל
+
+כל ריצה כותבת קודם לתיקייה זמנית, `build/runs/<run_id>/`. התוצרים עוברים ל-`artifacts/` רק אם כל השערים עברו.
+
+כשריצה נכשלת:
+- `artifacts/` נשאר בדיוק כמו שהיה, והאפליקציה ממשיכה להציג את הריצה המוצלחת האחרונה.
+- הסיכום הכושל נשמר ב-`logs/run_<ts>_summary.json`.
+- התיקייה הזמנית נשארת לבדיקה.
+- exit code 1.
+
+הדגמת כשל מבוקר, בלי לגעת ב-`artifacts/`:
+
+```bash
+python -m wine_crew.main --raw /tmp/missing.csv     # בדיקה מקדימה נכשלת מיד, בלי LLM
+python -m wine_crew.main --demo-fail contract       # Crew 1 רץ, שער 1 נכשל (עמודת price הוסרה מהקובץ הזמני)
+python -m wine_crew.main --demo-fail features       # שני ה-crews רצים, שער 2 נכשל (עמודת דליפה taster_name)
+python -m wine_crew.main --demo-fail model          # שני ה-crews רצים, שער 3 נכשל (MAE מעל ה-baseline)
+```
+
+הדגל `--demo-fail` משבש רק את הקובץ בתיקייה הזמנית, ונרשם בלוג כ-`DEMO`. אפשר גם להריץ על קובץ גולמי פגום, למשל 1,000 שורות ראשונות בתיקייה זמנית, עם `--raw`. במקרה כזה שער 1 נכשל על מספר השורות.
+
 ## תוצרים ב-Git
 
 התוצרים ב-`artifacts/` נכנסים ל-Git רק בריצות מלאות מכוונות, יחד עם הלוג של אותה ריצה, ולא אחרי כל ריצה. את `clean_data.csv` אפשר לשחזר בדיוק מהקובץ הגולמי עם `python -m wine_crew.main`. ה-sha256 של הקובץ הגולמי נרשם ב-`artifacts/analyst/dataset_contract.json` ובלוג, כך שרואים על איזה קובץ רצו.
