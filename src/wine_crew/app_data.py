@@ -454,7 +454,10 @@ FLOW_STEPS = [
     ("features", "שער 2 (features)"),
     ("model", "שער 3 (מודל)"),
 ]
-STEP_ICONS = {"passed": "✅", "failed": "❌", "not_run": "⏺"}
+# Status words (shown next to an SVG icon drawn in app/assets/status-*.svg; no emoji anywhere).
+STATUS_HE = {"passed": "עבר", "failed": "נכשל", "not_run": "לא רץ"}
+# Colors of the status icons (also in the SVG files); each has >= 3:1 on cream and white.
+STATUS_COLORS = {"passed": "#3E6B48", "failed": "#6E0F1A", "not_run": "#8A7A6E"}
 AGENT_HE = {
     "data_cleaner": "טוען ומנקה את הנתונים הגולמיים",
     "eda_analyst": "מחשב סיכומים ומייצר גרפים ודוח",
@@ -483,8 +486,15 @@ def flow_steps(summary: dict[str, Any]) -> list[dict[str, str]]:
     return steps
 
 
-def flow_line(steps: list[dict[str, str]]) -> str:
-    return " ← ".join(f"{STEP_ICONS[s['status']]} {s['label']}" for s in steps)
+def flow_html(steps: list[dict[str, str]]) -> str:
+    """The Flow steps as HTML: each step a span with its status class (the icon comes from CSS)
+    and the status word for screen readers; arrows between steps."""
+    import html as _html
+
+    items = [f'<span class="flow-step step-{s["status"]}" title="{STATUS_HE[s["status"]]}">'
+             f'<span class="sr-only">{STATUS_HE[s["status"]]}: </span>{_html.escape(s["label"])}</span>'
+             for s in steps]
+    return '<div class="flow-line">' + '<span class="flow-arrow">←</span>'.join(items) + "</div>"
 
 
 def agent_roles(crew: str) -> list[tuple[str, str]]:
@@ -744,7 +754,8 @@ def how_kpis(summary: dict[str, Any], metrics: dict[str, Any] | None) -> list[di
     """KPI tiles of 'איך זה עובד': the last run (run_summary.json) and the model (metrics.json)."""
     passed = summary.get("status") == "passed"
     tiles = [
-        {"label": "סטטוס הריצה", "value": "עברה ✅" if passed else "נכשלה ❌"},
+        {"label": "סטטוס הריצה", "value": "עברה" if passed else "נכשלה",
+         "key": "status_passed" if passed else "status_failed"},   # icon added in CSS by key
         {"label": "משך", "value": f"{summary['seconds']:.0f} שניות"},
         {"label": "עלות LLM", "value": f"${summary['total_cost_usd']:.4f}"},
         {"label": "בקשות ל-LLM", "value": f"{int((summary.get('tokens') or {}).get('requests', 0)):,}"},

@@ -1,6 +1,8 @@
 """The Streamlit app loads and its prediction form works (streamlit.testing.v1.AppTest)."""
 
 import html
+import json
+import re
 from pathlib import Path
 
 import pytest
@@ -147,7 +149,7 @@ def test_model_table_shows_zero_not_negative_zero(app):
 
 
 def test_title_is_hebrew_and_page_title_stays(app):
-    assert app.title[0].value == "🍷 ניקוד יינות ויינות ששווים את מחירם"
+    assert app.title[0].value == "ניקוד יינות ויינות ששווים את מחירם"   # no emoji: the glass is CSS
     assert app.caption[0].value.startswith("wine-crew · כל המספרים")
     source = open(APP, encoding="utf-8").read()
     assert 'page_title="wine-crew"' in source
@@ -273,8 +275,9 @@ def test_value_table_has_label_signed_score_and_help(app):
 def test_flow_diagram(app):
     how = _tab(app, "איך זה עובד")
     summary = ad.load_all(CONFIG)["summary"]
-    line = next(m.value for m in how.markdown if "←" in m.value)
-    assert line == ad.flow_line(ad.flow_steps(summary)) and line.count("✅") == 6
+    line = next(h.proto.body for h in how.get("html") if "flow-line" in h.proto.body)
+    assert line == ad.flow_html(ad.flow_steps(summary))
+    assert line.count('class="flow-step step-passed"') == 6
     text = " ".join(m.value for m in how.markdown)
     for crew in ("crew1", "crew2"):
         for _, role in ad.agent_roles(crew):
@@ -591,3 +594,43 @@ def test_missing_files_show_messages_not_errors(tmp_path, monkeypatch):
     how = _tab(at, "איך זה עובד")
     assert _keyed(at, "איך זה עובד", "kpis_how") is None
     assert len(how.warning) >= 2
+
+
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u23E9-\u23FA\u2B50\u2B55\uFE0F]")
+
+
+def _shown_text(app):
+    """Every piece of text the app shows (all tabs), except image data URIs in table cells."""
+    texts = []
+    for kind in ("title", "header", "subheader", "markdown", "caption", "success", "info", "warning",
+                 "error", "metric", "expander", "button", "download_button", "tabs"):
+        for el in app.get(kind) if kind not in ("title", "markdown", "caption") else getattr(app, kind):
+            for attr in ("value", "label"):
+                value = getattr(el, attr, None)
+                if isinstance(value, str):
+                    texts.append(value)
+    texts += [h.proto.body for h in app.get("html") if "<style>" not in h.proto.body]
+    for frame in app.dataframe:
+        for col in frame.value.columns:
+            texts.append(str(col))
+            texts += [str(v) for v in frame.value[col] if not str(v).startswith("data:image/")]
+    return texts
+
+
+def test_no_emoji_in_the_app(app):
+    app.button(key="predict").click().run()          # also the prediction result and similar wines
+    offending = [t for t in _shown_text(app) if EMOJI.search(t)]
+    assert offending == []
+
+
+def test_checks_table_shows_status_icons(app):
+    how = _tab(app, "איך זה עובד")
+    table = next(d for d in how.dataframe if "בדיקה" in d.value.columns)
+    assert all(str(v).startswith("data:image/svg+xml;base64,") for v in table.value["עבר"])
+    config = json.loads(table.proto.columns)
+    assert config["עבר"]["type_config"]["type"] == "image"
+
+
+def test_status_tile_has_its_icon_container(app):
+    tile = _keyed(app, "איך זה עובד", "kpi_status_passed")
+    assert tile is not None and _all(tile, "metric")[0].value == "עברה"

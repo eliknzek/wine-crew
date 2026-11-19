@@ -38,7 +38,8 @@ from wine_crew import app_data as ad  # noqa: E402
 import charts  # noqa: E402  (app/charts.py: altair charts for the dashboard tabs)
 from wine_crew.config import load_config, resolve_path  # noqa: E402
 
-st.set_page_config(page_title="wine-crew", page_icon="🍷", layout="wide")
+# Favicon: a line wine glass drawn for the app (PNG: page_icon does not take SVG). No emoji.
+st.set_page_config(page_title="wine-crew", page_icon=str(APP_DIR / "assets" / "favicon.png"), layout="wide")
 
 STYLE_FILE = APP_DIR / "style.css"
 ASSETS = APP_DIR / "assets"
@@ -171,8 +172,24 @@ def kpi_row(tiles: list[dict], key: str) -> None:
     """A row of KPI tiles (st.metric with a border); 2 per row on narrow screens (style.css)."""
     with st.container(key=key):
         for col, tile in zip(st.columns(len(tiles)), tiles):
-            col.metric(tile["label"], tile["value"], delta=tile.get("delta"),
-                       delta_color=tile.get("delta_color", "normal"), help=tile.get("help"), border=True)
+            # a tile with a "key" (the run status) gets its own container, so CSS can add its icon
+            with col, (st.container(key=f"kpi_{tile['key']}") if tile.get("key") else st.container()):
+                st.metric(tile["label"], tile["value"], delta=tile.get("delta"),
+                          delta_color=tile.get("delta_color", "normal"), help=tile.get("help"), border=True)
+
+
+@st.cache_resource
+def _status_uris() -> dict[str, str]:
+    """The status icons (app/assets/status-*.svg) as data URIs, for image cells in tables."""
+    import base64
+
+    return {status: "data:image/svg+xml;base64," + base64.b64encode(
+        (ASSETS / f"status-{status.replace('_', '-')}.svg").read_bytes()).decode()
+        for status in ad.STATUS_HE}
+
+
+def status_icon(status: str) -> str:
+    return _status_uris()[status]
 
 
 def wine_cards(wines: pd.DataFrame, key_prefix: str) -> None:
@@ -211,7 +228,7 @@ band = _band(ranking_fp)
 metrics = data["metrics"]
 
 with st.container(key="hero"):
-    st.title("🍷 ניקוד יינות ויינות ששווים את מחירם")
+    st.title("ניקוד יינות ויינות ששווים את מחירם")   # the glass icon is added in style.css
     st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
     st.markdown(INTRO)
     st.html(DIVIDER)
@@ -393,12 +410,14 @@ with learned_tab:
         or a message when neither exists) and, if given, the finding it supports."""
         with st.container(border=True, key=f"chart_{key}"):
             st.markdown(f'<div class="card-title">{html.escape(title)}</div>', unsafe_allow_html=True)
-            graph_col, text_col = st.columns([3, 2]) if (beside and text) else (st.container(), None)
+            # Text first (on the right, where a Hebrew reader starts), then the chart, with a wide
+            # gap: the chart's Y-axis title then sits on the far side, away from the bullets.
+            text_col, graph_col = st.columns([2, 3], gap="large") if (beside and text) else (None, st.container())
             with graph_col:
                 if chart is not None:
                     st.altair_chart(chart, width="stretch", key=f"altair_{key}")
                 elif png in pngs:
-                    st.image(str(pngs[png]), caption=ad.CHART_TITLES_HE[png], width="stretch")
+                    st.image(str(pngs[png]), width="stretch")   # the card title already names it
                 else:
                     st.info("אין נתונים לגרף הזה בתוצרים.")
             if text:
@@ -475,7 +494,7 @@ with how_tab:
         kpi_row(ad.how_kpis(summary, metrics), "kpis_how")
         with st.container(border=True, key="card_flow"):
             st.subheader("איך ה-Flow רץ")
-            st.markdown(ad.flow_line(ad.flow_steps(summary)))
+            st.html(ad.flow_html(ad.flow_steps(summary)))
             st.caption("שער 2 נבדק גם בתוך Crew 2, לפני האימון (guardrail של משימת ה-features), "
                        "ושוב כשער של ה-Flow אחרי ש-Crew 2 מסיים.")
             crew_cols = st.columns(2)
@@ -492,11 +511,11 @@ with how_tab:
         with st.container(border=True, key="card_checks"):
             st.subheader("בדיקות")
             checks = pd.DataFrame([
-                {"בדיקה": CHECK_NAMES.get(name, name), "עבר": "✅" if c["passed"] else "❌",
+                {"בדיקה": CHECK_NAMES.get(name, name), "עבר": status_icon("passed" if c["passed"] else "failed"),
                  "פרטים": ad.check_sentence(name, c, summary, data["contract"])}
                 for name, c in summary["checks"].items()
             ])
-            show_table_rtl(checks)
+            show_table_rtl(checks, column_config={"עבר": st.column_config.ImageColumn("עבר", width="small")})
             with st.expander("פרטים טכניים"):
                 for name, c in summary["checks"].items():
                     st.markdown(f"**{CHECK_NAMES.get(name, name)}**")

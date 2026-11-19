@@ -82,7 +82,9 @@ def test_flow_steps_passed_run():
     steps = ad.flow_steps(summary)
     assert [s["key"] for s in steps] == ["preflight", "crew1", "contract", "crew2", "features", "model"]
     assert {s["status"] for s in steps} == {"passed"}
-    assert ad.flow_line(steps).count("✅") == 6
+    html = ad.flow_html(steps)
+    assert html.count('class="flow-step step-passed"') == 6 and html.count("flow-arrow") == 5
+    assert "✅" not in html
 
 
 def test_flow_steps_gate2_failed():
@@ -358,10 +360,12 @@ def test_how_kpis():
     metrics = {"selected": "v2", "models": {"v2": {"test": {"mae": 1.6895, "r2": 0.5184}},
                                             "baseline": {"test": {"mae": 2.538, "r2": -0.0001}}}}
     tiles = ad.how_kpis(summary, metrics)
-    assert [t["value"] for t in tiles] == ["עברה ✅", "61 שניות", "$0.0034", "1,234", "1.69", "0.52"]
+    assert [t["value"] for t in tiles] == ["עברה", "61 שניות", "$0.0034", "1,234", "1.69", "0.52"]
+    assert tiles[0]["key"] == "status_passed"
     assert tiles[4]["delta"] == "-0.85 מהבסיס" and tiles[4]["delta_color"] == "inverse"
     assert len(ad.how_kpis({**summary, "status": "failed"}, None)) == 4
-    assert ad.how_kpis({**summary, "status": "failed"}, None)[0]["value"] == "נכשלה ❌"
+    failed = ad.how_kpis({**summary, "status": "failed"}, None)[0]
+    assert (failed["value"], failed["key"]) == ("נכשלה", "status_failed")
 
 
 def test_insight_sections():
@@ -393,3 +397,24 @@ def test_chart_series_colors_have_3_to_1_contrast():
         assert contrast_ratio(color, theme["backgroundColor"]) >= 3, color
         assert contrast_ratio(color, "#FFFFFF") >= 3, color
     assert contrast_ratio(ad.CHART_COLORS["reference"], theme["backgroundColor"]) < 3   # decoration only
+
+
+
+def test_flow_html_statuses():
+    summary = {"checks": {"preflight": _ok(), "contract": _ok(), "features": _ok(False)},
+               "crews": {"crew1": {}, "crew2": {}}, "failed_check": "features"}
+    html = ad.flow_html(ad.flow_steps(summary))
+    assert html.count("step-passed") == 4 and html.count("step-failed") == 1 and html.count("step-not_run") == 1
+    assert "נכשל" in html and "לא רץ" in html          # status words for screen readers
+
+
+def test_status_icon_colors_have_3_to_1_contrast():
+    """The drawn status icons (and their colors in the SVG files) are graphical objects: >= 3:1."""
+    from wine_crew.config import REPO_ROOT
+
+    theme = _theme()
+    for status, color in ad.STATUS_COLORS.items():
+        assert contrast_ratio(color, theme["backgroundColor"]) >= 3, status
+        assert contrast_ratio(color, "#FFFFFF") >= 3, status
+        svg = (REPO_ROOT / "app" / "assets" / f"status-{status.replace('_', '-')}.svg").read_text()
+        assert color in svg, status

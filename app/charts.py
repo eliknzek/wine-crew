@@ -13,7 +13,21 @@ import pandas as pd
 from wine_crew import app_data as ad
 
 HEIGHT = 280
-FONT = "Rubik"
+
+
+def _body_font() -> str:
+    """The body font name from .streamlit/config.toml (e.g. "Rubik"), so charts follow the theme."""
+    import tomllib
+    from pathlib import Path
+
+    config = Path(__file__).resolve().parent.parent / ".streamlit" / "config.toml"
+    try:
+        return tomllib.loads(config.read_text(encoding="utf-8"))["theme"]["font"].split(":", 1)[0]
+    except (OSError, KeyError, ValueError):
+        return "sans-serif"
+
+
+FONT = _body_font()
 
 
 def _style(chart: alt.Chart) -> alt.Chart:
@@ -89,7 +103,8 @@ def points_hist(hist: pd.DataFrame) -> alt.Chart:
     """Number of wines per score, colored by the WineEnthusiast band (legend)."""
     color = alt.Color("label:N", title=None, sort=list(ad.SCORE_COLORS),
                       scale=alt.Scale(domain=list(ad.SCORE_COLORS), range=list(ad.SCORE_COLORS.values())),
-                      legend=alt.Legend(columns=3, symbolType="square"))   # all 6 bands fit
+                      # one column, top to bottom from "סביר" to "קלאסי": no left/right reading order
+                      legend=alt.Legend(orient="right", direction="vertical", columns=1, symbolType="square"))
     return _style(alt.Chart(hist).mark_bar().encode(
         x=alt.X("points:O", title="ניקוד", axis=alt.Axis(labelAngle=0)),
         y=alt.Y("count:Q", title="יינות", axis=alt.Axis(format=",.0f")),
@@ -100,10 +115,11 @@ def points_hist(hist: pd.DataFrame) -> alt.Chart:
 
 def price_bars(bands: pd.DataFrame) -> alt.Chart:
     """Number of wines per price band, horizontal so every band label fits (order from eda_summary)."""
-    return _style(alt.Chart(bands).mark_bar(color=ad.CHART_COLORS["main"]).encode(
-        y=alt.Y("band:N", title=None, sort=list(bands["band"]), axis=alt.Axis(labelOverlap=False)),
+    return _style(alt.Chart(bands).mark_bar(color=ad.CHART_COLORS["main"], height={"band": 0.75}).encode(
+        y=alt.Y("band:N", title=None, sort=list(bands["band"]), axis=alt.Axis(labelOverlap=False, labelPadding=4)),
         x=alt.X("count:Q", title="יינות", axis=alt.Axis(format=",.0f", tickCount=4)),
-        tooltip=[alt.Tooltip("band:N", title="טווח מחיר"), alt.Tooltip("count:Q", title="יינות", format=",")]))
+        tooltip=[alt.Tooltip("band:N", title="טווח מחיר"), alt.Tooltip("count:Q", title="יינות", format=",")])
+        ).properties(height=HEIGHT + 60)   # 13 band labels need more room than the other charts
 
 
 def vintage_line(vintages: pd.DataFrame) -> alt.Chart:
