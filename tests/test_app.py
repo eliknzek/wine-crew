@@ -23,8 +23,15 @@ def app(monkeypatch):
     return at
 
 
-def test_app_loads_with_five_tabs(app):
-    assert [t.label for t in app.tabs] == ["סקירה", "ניתוח", "מודל", "מציאת שווים למחיר", "חיזוי"]
+TABS = ["מצא יין שווה", "בדוק יין", "מה למדנו", "איך זה עובד"]
+
+
+def _tab(app, label):
+    return next(t for t in app.tabs if t.label == label)
+
+
+def test_app_loads_with_four_tabs(app):
+    assert [t.label for t in app.tabs] == TABS
     assert any("passed" in s.value for s in app.success)
     assert len(app.dataframe) >= 3              # checks, model comparison, value wines
     assert any("ניקוד חציוני" in m.value for m in app.markdown)   # insights.md rendered
@@ -61,8 +68,14 @@ def test_prediction_form(app):
     expected = ad.predict_points(ad.load_model(CONFIG), data["metrics"], {
         "price": 40.0, "vintage": 2010, "country": "France", "province": "Bordeaux",
         "variety": "Bordeaux-style Red Blend", "region_1": ad.UNKNOWN})
-    assert metric.value == f"{expected:.1f}"
-    assert 80 <= float(metric.value) <= 100
+    assert 80 <= expected <= 100
+    assert metric.value == ad.score_text(expected)                      # "89: טוב מאוד"
+    assert metric.proto.help == ad.GLOSSARY["ניקוד צפוי"]
+    band = ad.residual_band(ad.load_ranking(CONFIG))                     # from value_ranking.csv
+    assert any(m.value == ad.prediction_sentence(expected, band) for m in app.markdown)
+    assert sum(ad.score_text(expected) in m.value for m in app.markdown) == 0   # the score is shown once, in the metric
+    assert any(f"התחזית המדויקת: {expected:.1f}" in c.value for c in app.caption)
+    assert any(ad.accuracy_sentence(data["metrics"]) in c.value for c in app.caption)
 
 
 def test_value_filter(app):
@@ -91,6 +104,7 @@ def test_every_table_is_right_to_left(app):
     assert checks == ("פרטים", "עבר", "בדיקה")
     assert models == ("R² (test)", "RMSE (test)", "MAE (test)", "CV MAE", "מודל")
     assert ranking[-1] == "rank" and ranking[-2] == "title" and ranking[0] == "value_score"
+    assert ranking[:3] == ("value_score", "predicted", "label")
 
 
 def test_ranking_sort_survives_rtl(app):
@@ -184,3 +198,87 @@ def test_new_artifacts_load_without_clearing_the_cache(tmp_path, monkeypatch):
     at.run()
     assert not at.exception, at.exception
     assert any("20990101-000000-abcdef" in m.value for m in at.markdown)
+
+
+def test_every_former_item_is_still_shown(app):
+    """Everything the five old tabs showed is still shown, in the tab it moved to."""
+    find, learned, how = (_tab(app, label) for label in ("מצא יין שווה", "מה למדנו", "איך זה עובד"))
+    predict = _tab(app, "בדוק יין")
+    data = ad.load_all(CONFIG)
+    summary = data["summary"]
+    # was "סקירה"
+    assert any("passed" in s.value for s in how.success)
+    assert any(summary["run_id"] in m.value for m in how.markdown)
+    assert {"תאריך (UTC)", "משך", "עלות LLM", "בקובץ הגולמי", "אחרי ניקוי", "ב-features", "אימון",
+            "בדיקה"} <= {m.label for m in how.metric}
+    if summary.get("tokens"):
+        assert any(c.value == ad.tokens_text(summary["tokens"]) for c in how.caption)
+    assert any("בדיקה" in d.value.columns for d in how.dataframe)
+    assert len(next(e for e in how.expander if e.label == "פרטים טכניים").json) == 4
+    assert any(summary["raw_sha256"] in c.value for c in how.caption)
+    # was "מודל"
+    assert any("מודל" in d.value.columns and "CV MAE" in d.value.columns for d in how.dataframe)
+    assert any(m.value.strip() == data["model_card"].strip() for m in how.markdown)
+    assert any(e.label.startswith("דוח ההערכה המלא") for e in how.expander)
+    # was "ניתוח"
+    assert any("ניקוד חציוני" in m.value for m in learned.markdown)
+    assert len(learned.get("image")) == len(ad.chart_paths(CONFIG)) == 7
+    assert len(learned.get("download_button")) == 1
+    # was "מציאת שווים למחיר"
+    assert any("value_score" in d.value.columns for d in find.dataframe)
+    keys = {w.key for kind in ("number_input", "multiselect", "slider") for w in find.get(kind)}
+    assert keys == {"value_price_max", "value_price_min", "value_countries", "value_varieties", "value_top"}
+    more = next(e for e in find.expander if e.label == "סינון נוסף")
+    assert {w.key for kind in ("number_input", "slider") for w in more.get(kind)} == \
+        {"value_price_min", "value_top"}
+    # was "חיזוי"
+    assert {w.key for w in predict.selectbox} == {"form_country", "form_province", "form_region",
+                                                 "form_variety", "form_vintage"}
+    assert [b.key for b in predict.button] == ["predict"]
+
+
+def test_intro_above_tabs_and_one_line_per_tab(app):
+    intro = list(app.main.children.values())[2]                  # title, caption, then the intro line
+    assert all(f"**{label}**" in intro.value for label in TABS)
+    for tab in app.tabs:
+        assert tab.markdown[0].value.strip()                                     # first thing in each tab
+
+
+def test_budget_comes_first(app):
+    find = _tab(app, "מצא יין שווה")
+    assert find.number_input[0].key == "value_price_max"
+    assert find.number_input[0].label.startswith("תקציב")
+
+
+def test_value_table_has_label_signed_score_and_help(app):
+    import json
+
+    table = next(d for d in app.dataframe if "value_score" in d.value.columns)
+    assert list(table.value["label"]) == [ad.score_label(p) for p in table.value["points"]]
+    assert "מה זה אומר" not in table.value.columns
+    config = json.loads(table.proto.columns)
+    assert config["value_score"]["type_config"]["format"] == "%+.1f"
+    assert config["value_score"]["help"] == ad.GLOSSARY["ציון שווי"]
+    assert config["predicted"]["help"] == ad.GLOSSARY["ניקוד צפוי"]
+    first = table.value["value_score"].iloc[0]
+    assert any(ad.value_sentence(first) in c.value for c in _tab(app, "מצא יין שווה").caption)
+
+
+def test_flow_diagram(app):
+    how = _tab(app, "איך זה עובד")
+    summary = ad.load_all(CONFIG)["summary"]
+    line = next(m.value for m in how.markdown if "←" in m.value)
+    assert line == ad.flow_line(ad.flow_steps(summary)) and line.count("✅") == 6
+    text = " ".join(m.value for m in how.markdown)
+    for crew in ("crew1", "crew2"):
+        for _, role in ad.agent_roles(crew):
+            assert role in text
+    assert any("שער 2 נבדק גם בתוך Crew 2" in c.value for c in how.caption)
+
+
+def test_glossary_help_on_terms(app):
+    how, find = _tab(app, "איך זה עובד"), _tab(app, "מצא יין שווה")
+    learned = _tab(app, "מה למדנו")
+    assert any(m.proto.help == ad.GLOSSARY["out-of-fold"] for m in find.markdown)
+    assert any(ad.GLOSSARY["חציון"] in (h.proto.help or "") for h in learned.subheader)
+    assert any(ad.GLOSSARY["MAE"] in (h.proto.help or "") for h in how.subheader)

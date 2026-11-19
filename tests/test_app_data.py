@@ -228,3 +228,12 @@ def test_data_files_are_what_load_all_reads():
 def test_tokens_text():
     text = ad.tokens_text({"requests": 11, "input_tokens": 15325, "cached_input_tokens": 2688, "output_tokens": 2225})
     assert text == "11 בקשות · טוקני קלט: 15,325 (מהם 2,688 מהמטמון) · טוקני פלט: 2,225"
+
+
+def test_prediction_range_holds_about_8_in_10_wines(ranking):
+    """The range shown in 'בדוק יין' really holds ~80% of the wines (out-of-fold predictions)."""
+    band = ad.residual_band(ranking)
+    sample = ranking.iloc[::10]
+    inside = [lo <= p <= hi for p, (lo, hi) in
+              zip(sample["points"], (ad.prediction_range(x, band) for x in sample["predicted"]))]
+    assert 0.77 <= sum(inside) / len(inside) <= 0.83
