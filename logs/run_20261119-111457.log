@@ -1,0 +1,29 @@
+2026-11-19T11:14:57Z INFO [20261119-111457-e73935] run 20261119-111457-e73935 started; log logs/run_20261119-111457.log; staging build/runs/20261119-111457-e73935
+2026-11-19T11:14:57Z INFO [20261119-111457-e73935] step preflight: start
+2026-11-19T11:14:57Z INFO [20261119-111457-e73935] check preflight: PASSED - ok {"raw_csv": "data/raw/winemag-data-130k-v2.csv", "sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9"}
+2026-11-19T11:14:57Z INFO [20261119-111457-e73935] raw file data/raw/winemag-data-130k-v2.csv sha256=52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9 rows=129971
+2026-11-19T11:14:57Z INFO [20261119-111457-e73935] step preflight: end (0.0s)
+2026-11-19T11:14:57Z INFO [20261119-111457-e73935] step crew1: start
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] crew1 requests by task: clean_task=1 eda_task=2 insights_task=2 contract_task=1
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] crew1 tokens: total=46156 prompt=41508 cached=5120 completion=4648 requests=24 cost=$0.0086
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] crew1 rows: in=129971 out=111537
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] step crew1: end (25.0s)
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] step gate_contract: start
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] check contract: PASSED - ok {"rows": 111537, "sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9"}
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] step gate_contract: end (0.1s)
+2026-11-19T11:15:22Z INFO [20261119-111457-e73935] step crew2: start
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] crew2 requests by task: validate_task=1 features_task=1 train_task=1 model_card_task=2
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] crew2 tokens: total=24044 prompt=19792 cached=5632 completion=4252 requests=20 cost=$0.0051
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] crew2 rows: in=111537 out=111537
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step crew2: end (31.1s)
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step gate_features: start
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] check features: PASSED - ok {"rows": 111537, "columns": ["log_price", "vintage", "vintage_missing", "country", "province", "variety", "region_1"]}
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step gate_features: end (0.0s)
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step gate_model: start
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] check model: PASSED - ok {"selected": "v2", "mae": 1.6895, "baseline_mae": 2.538, "sample_predictions": [88.02, 87.54, 86.15, 91.39, 86.26], "ranked_wines": 111537}
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] train rows: train=89229 test=22308; selected v2 MAE 1.6895 vs baseline 2.5380
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step gate_model: end (0.1s)
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step promote: start
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] promoted build/runs/20261119-111457-e73935 into artifacts/
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] step promote: end (0.0s)
+2026-11-19T11:15:54Z INFO [20261119-111457-e73935] run passed in 56.2s; total cost $0.0137; summary artifacts/run_summary.json

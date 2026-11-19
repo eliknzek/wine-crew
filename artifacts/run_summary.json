@@ -1,9 +1,9 @@
 {
-  "run_id": "20261119-103451-e16b16",
+  "run_id": "20261119-111457-e73935",
   "status": "passed",
-  "started_at": "2026-11-19T10:34:51+00:00",
-  "finished_at": "2026-11-19T10:36:01+00:00",
-  "seconds": 69.3,
+  "started_at": "2026-11-19T11:14:57Z",
+  "finished_at": "2026-11-19T11:15:54Z",
+  "seconds": 56.2,
   "raw_sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9",
   "rows": {
     "raw": 129971,
@@ -38,34 +38,70 @@
   },
   "crews": {
     "crew1": {
-      "seconds": 33.2,
+      "seconds": 24.9,
       "tokens": {
-        "total_tokens": 59000,
-        "prompt_tokens": 53060,
-        "cached_prompt_tokens": 11776,
-        "completion_tokens": 5940,
+        "total_tokens": 46156,
+        "prompt_tokens": 41508,
+        "cached_prompt_tokens": 5120,
+        "completion_tokens": 4648,
         "reasoning_tokens": 0,
         "cache_creation_tokens": 0,
-        "successful_requests": 32
+        "successful_requests": 24
       },
-      "cost_usd": 0.01064
+      "cost_usd": 0.008631,
+      "requests_by_task": {
+        "clean_task": {
+          "requests": 1,
+          "guardrail_retries": 0
+        },
+        "eda_task": {
+          "requests": 2,
+          "guardrail_retries": 0
+        },
+        "insights_task": {
+          "requests": 2,
+          "guardrail_retries": 0
+        },
+        "contract_task": {
+          "requests": 1,
+          "guardrail_retries": 0
+        }
+      }
     },
     "crew2": {
-      "seconds": 35.7,
+      "seconds": 31.1,
       "tokens": {
-        "total_tokens": 29228,
-        "prompt_tokens": 24824,
+        "total_tokens": 24044,
+        "prompt_tokens": 19792,
         "cached_prompt_tokens": 5632,
-        "completion_tokens": 4404,
+        "completion_tokens": 4252,
         "reasoning_tokens": 0,
         "cache_creation_tokens": 0,
-        "successful_requests": 32
+        "successful_requests": 20
       },
-      "cost_usd": 0.005944
+      "cost_usd": 0.005098,
+      "requests_by_task": {
+        "validate_task": {
+          "requests": 1,
+          "guardrail_retries": 0
+        },
+        "features_task": {
+          "requests": 1,
+          "guardrail_retries": 0
+        },
+        "train_task": {
+          "requests": 1,
+          "guardrail_retries": 0
+        },
+        "model_card_task": {
+          "requests": 2,
+          "guardrail_retries": 0
+        }
+      }
     }
   },
-  "total_cost_usd": 0.016584,
-  "log": "logs/run_20261119-103451.log",
+  "total_cost_usd": 0.013729,
+  "log": "logs/run_20261119-111457.log",
   "artifacts": {
     "clean_csv": "artifacts/analyst/clean_data.csv",
     "contract_json": "artifacts/analyst/dataset_contract.json",
