@@ -1,5 +1,6 @@
 """The Streamlit app loads and its prediction form works (streamlit.testing.v1.AppTest)."""
 
+import html
 from pathlib import Path
 
 import pytest
@@ -150,7 +151,8 @@ def test_title_is_hebrew_and_page_title_stays(app):
     assert app.caption[0].value.startswith("wine-crew · כל המספרים")
     source = open(APP, encoding="utf-8").read()
     assert 'page_title="wine-crew"' in source
-    assert '[data-testid="stHeading"]' in source and '[data-testid="stCaptionContainer"]' in source
+    css = (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")       # RTL rules live in style.css
+    assert '[data-testid="stHeading"]' in css and '[data-testid="stCaptionContainer"]' in css
 
 
 def test_analysis_tab_shows_hebrew_country_names(app):
@@ -238,7 +240,8 @@ def test_every_former_item_is_still_shown(app):
 
 
 def test_intro_above_tabs_and_one_line_per_tab(app):
-    intro = list(app.main.children.values())[2]                  # title, caption, then the intro line
+    hero = list(app.main.children.values())[0]                   # the hero band comes first
+    intro = list(hero.children.values())[2]                       # title, caption, then the intro line
     assert all(f"**{label}**" in intro.value for label in TABS)
     for tab in app.tabs:
         assert tab.markdown[0].value.strip()                                     # first thing in each tab
@@ -343,3 +346,73 @@ def test_wine_card_after_selecting_a_row(app):
 def test_csv_download_button(app):
     buttons = _tab(app, "מצא יין שווה").get("download_button")
     assert [b.proto.label for b in buttons] == ["הורדת הרשימה (CSV)"]
+
+
+def _cards(app):
+    find = _tab(app, "מצא יין שווה")
+    blocks = []
+
+    def walk(node):
+        for child in getattr(node, "children", {}).values():
+            key = getattr(getattr(child, "proto", None), "id", "") or ""
+            if "top_wine_" in key:
+                blocks.append(child)
+            walk(child)
+
+    walk(find)
+    return blocks
+
+
+def test_top3_cards_match_the_first_table_rows(app):
+    cards = _cards(app)
+    first = ad.filter_ranking(ad.load_ranking(CONFIG), top=50).head(3)
+    assert len(cards) == 3
+    for card, wine in zip(cards, first.itertuples()):
+        text = " ".join(m.value for m in card.markdown)
+        assert html.escape(wine.title) in text
+        assert ad.money(wine.price) in text and 'class="wine-price"' in text
+        assert ad.score_text(wine.points) in text and ad.signed(wine.value_score) in text
+
+
+def _pair_with_two_wines():
+    ranking = ad.load_ranking(CONFIG)
+    sizes = ranking.groupby(["country", "variety"]).size()
+    country, variety = sizes[sizes == 2].index[0]
+    return ranking, country, variety
+
+
+def test_fewer_cards_when_the_filter_returns_fewer_wines(app):
+    ranking, country, variety = _pair_with_two_wines()
+    app.multiselect(key="value_countries").select(country)
+    app.multiselect(key="value_varieties").select(variety).run()
+    assert not app.exception, app.exception
+    cards = _cards(app)
+    expected = ad.filter_ranking(ranking, [country], [variety], top=50)
+    assert len(cards) == len(expected) == 2
+    assert all(html.escape(w) in " ".join(m.value for m in c.markdown) for c, w in zip(cards, expected["title"]))
+    cheapest = float(expected["price"].min())
+    app.number_input(key="value_price_max").set_value(max(4.0, cheapest - 1)).run()
+    assert not app.exception, app.exception
+    assert _cards(app) == []
+
+
+def test_footer(app):
+    footer = [h for h in app.get("html") if "<footer" in h.proto.body]
+    assert len(footer) == 1
+    body = footer[0].proto.body
+    assert "אלי ומתנאל · פרויקט קורס" in body
+    assert 'href="https://github.com/eliknzek/wine-crew"' in body
+    assert "נבנה עם CrewAI ו-Streamlit" in body
+
+
+def test_css_is_injected_once_from_style_css(app):
+    styles = [h for h in app.get("html") if "<style>" in h.proto.body]
+    assert len(styles) == 1
+    css = styles[0].proto.body
+    assert 'url("app/static/hero-cellar.webp")' in css and "data:image/svg+xml," in css
+    assert "{{" not in css and "base64" not in css
+    # Streamlit sanitizes st.html with DOMPurify, which drops a whole <style> whose text has
+    # anything tag-like ("<key>" in a comment did that), so the stylesheet must have no "<".
+    assert "<" not in (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")
+    source = open(APP, encoding="utf-8").read()
+    assert "<style" not in source.replace('f"<style>{css}</style>"', "")   # no other CSS in the code

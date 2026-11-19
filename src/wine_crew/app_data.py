@@ -646,3 +646,15 @@ def ranking_csv(df: pd.DataFrame) -> bytes:
         value_score=df["value_score"].round(2),
     )
     return out[list(CSV_COLUMNS)].rename(columns=CSV_COLUMNS).to_csv(index=False).encode("utf-8-sig")
+
+
+# --------------------------------------------------------------------------- table display
+
+def short_title(title: Any, max_chars: int = 40) -> str:
+    """A long wine name cut at a word boundary with "…", for table cells (the grid cannot wrap
+    text). The full name stays in the wine card, the top-3 cards and the CSV."""
+    text = str(title)
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars].rsplit(" ", 1)[0].rstrip(" ,-–(")
+    return (cut or text[:max_chars]) + "…"

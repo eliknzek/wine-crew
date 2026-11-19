@@ -232,3 +232,65 @@ def test_ranking_csv():
     assert list(back["בציר"]) == ["2010", ""]
     assert list(back["ציון שווי"]) == ["1.23", "-0.46"]
     assert list(back["דרגה"]) == ["מצוין", "מצוין"]
+
+
+# --------------------------------------------------------------------------- design
+
+def test_short_title_cuts_at_a_word():
+    long = "Au Bon Climat 2007 Los Alamos Vineyard Chardonnay (Santa Barbara County)"
+    short = ad.short_title(long)
+    assert short == "Au Bon Climat 2007 Los Alamos Vineyard…"
+    assert len(short) <= 41 and long.startswith(short[:-1])
+    assert ad.short_title("Rulo 2007 Syrah (Columbia Valley (WA))") == "Rulo 2007 Syrah (Columbia Valley (WA))"
+    assert ad.short_title("A" * 50).endswith("…")          # one long word: cut inside it, still marked
+
+
+def _luminance(hex_color):
+    channels = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)] if isinstance(hex_color, str) \
+        else [c / 255 for c in hex_color]
+    lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def contrast_ratio(a, b):
+    hi, lo = sorted([_luminance(a), _luminance(b)], reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _theme():
+    import tomllib
+
+    from wine_crew.config import REPO_ROOT
+    return tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())["theme"]
+
+
+def _css_value(name):
+    import re
+
+    from wine_crew.config import REPO_ROOT
+    css = (REPO_ROOT / "app" / "style.css").read_text()
+    return re.search(rf"--{name}:\s*([^;]+);", css).group(1).strip()
+
+
+def test_theme_text_contrast_meets_wcag_aa():
+    theme = _theme()
+    assert contrast_ratio(theme["textColor"], theme["backgroundColor"]) >= 4.5
+    assert contrast_ratio(theme["textColor"], theme["secondaryBackgroundColor"]) >= 4.5
+    assert contrast_ratio(theme["primaryColor"], theme["backgroundColor"]) >= 4.5    # prices, button text
+    assert contrast_ratio("#FFFFFF", theme["primaryColor"]) >= 4.5                    # hovered button
+
+
+def _overlay_on_white(rgb, alpha):
+    return tuple(alpha * c + (1 - alpha) * 255 for c in rgb)
+
+
+def test_hero_overlay_is_just_dark_enough_for_white_text():
+    """Worst case: a white pixel under the overlay. The CSS alpha is the lowest that still gives
+    white text 4.5:1, plus a small margin, so the photo stays visible."""
+    rgb = tuple(int(v) for v in _css_value("hero-overlay-rgb").split(","))
+    alpha = float(_css_value("hero-overlay-min"))
+    lowest = next(a / 100 for a in range(101)
+                  if contrast_ratio("#FFFFFF", _overlay_on_white(rgb, a / 100)) >= 4.5)
+    assert lowest == 0.58
+    assert contrast_ratio("#FFFFFF", _overlay_on_white(rgb, alpha)) >= 4.5
+    assert lowest < alpha <= lowest + 0.05

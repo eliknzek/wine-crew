@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 28" width="240" height="28">
+  <!-- Thin gold rule with a small grape cluster in the middle (drawn for wine-crew). -->
+  <g stroke="#C9A227" stroke-width="1" stroke-linecap="round" fill="none">
+    <line x1="4" y1="14" x2="98" y2="14"/>
+    <line x1="142" y1="14" x2="236" y2="14"/>
+    <path d="M120 3 q4 -2 7 1"/>
+  </g>
+  <path d="M121 4 q8 -3 12 3 q-7 2 -12 -3z" fill="#C9A227"/>
+  <g fill="#7B2D43">
+    <circle cx="114" cy="9" r="3.2"/><circle cx="120.5" cy="9" r="3.2"/><circle cx="127" cy="9" r="3.2"/>
+    <circle cx="117.2" cy="15" r="3.2"/><circle cx="123.8" cy="15" r="3.2"/>
+    <circle cx="120.5" cy="21" r="3.2"/>
+  </g>
+  <circle cx="102" cy="14" r="1.6" fill="#C9A227"/><circle cx="138" cy="14" r="1.6" fill="#C9A227"/>
+</svg>

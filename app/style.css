@@ -1,0 +1,123 @@
+/* wine-crew app styles: the only CSS in the app, injected once by load_style() in
+   streamlit_app.py. Colors come from .streamlit/config.toml ([theme]); this file adds layout,
+   right-to-left text and the cellar look. Selectors use data-testid and st-key-KEY
+   (containers created with key=...), which are stable across Streamlit versions.
+   {{DIVIDER_DATA_URI}} is replaced with app/assets/divider.svg as a data URI at load time. */
+
+/* ---- Variables ------------------------------------------------------------------------- */
+:root {
+  --wine-bordeaux: #7B2D43;
+  --wine-gold: #C9A227;          /* decoration only, never text (contrast 2.2:1 on cream) */
+  --wine-cream: #F7F4EF;
+  --wine-card: #FFFFFF;
+  --wine-divider: url("{{DIVIDER_DATA_URI}}");
+  /* Dark overlay on the hero photo. The minimum alpha keeps white text at >= 4.5:1 even over a
+     white pixel (tests/test_app_text.py computes the lowest passing value, 0.58, and checks this
+     one is just above it), so the photo still shows through. */
+  --hero-overlay-rgb: 43, 10, 20;
+  --hero-overlay-min: 0.62;
+}
+
+/* ---- Right-to-left layout -------------------------------------------------------------- */
+.stApp, .stMarkdown, .stTabs, [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+.stMarkdown ul, .stMarkdown ol, .stMarkdown li { direction: rtl; text-align: right; }
+/* Headings and captions: set the direction explicitly, so a line that starts with Latin text
+   (e.g. "wine-crew · ...") is still laid out right-to-left. */
+[data-testid="stHeading"], [data-testid="stHeading"] h1, [data-testid="stHeading"] h2,
+[data-testid="stHeading"] h3, [data-testid="stCaptionContainer"] { direction: rtl; text-align: right; }
+[data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
+/* Dropdown lists open in a popover outside the widget, so target the dropdown itself. */
+[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] { direction: rtl; }
+[data-testid="stSelectboxVirtualDropdown"] [role="option"],
+[data-testid="stMultiSelectDropdown"] [role="option"] { direction: rtl; text-align: right; }
+.stMarkdown table { direction: rtl; }
+
+/* ---- Page frame ------------------------------------------------------------------------ */
+[data-testid="stMainBlockContainer"] { padding-top: 3.5rem; }
+[data-testid="stMain"] { overflow-x: clip; }   /* the full-bleed hero must not add a side scroll */
+
+/* ---- Hero: full-width photo band with a dark bordeaux overlay --------------------------- */
+.st-key-hero {
+  /* Full bleed, independent of text direction: the box starts at the column's right edge
+     (RTL), moves left by half the column, then right by half its own (window) width. */
+  width: 100vw; max-width: 100vw;
+  position: relative; right: 50%; transform: translateX(50%);
+  padding: 4.5rem max(1.5rem, calc(50vw - 38rem)) 3.5rem;
+  background:
+    linear-gradient(rgba(var(--hero-overlay-rgb), var(--hero-overlay-min)),
+                    rgba(var(--hero-overlay-rgb), calc(var(--hero-overlay-min) + 0.12))),
+    url("app/static/hero-cellar.webp") center / cover no-repeat;
+  text-align: center;
+}
+.st-key-hero [data-testid="stHeading"], .st-key-hero [data-testid="stHeading"] h1,
+.st-key-hero [data-testid="stCaptionContainer"], .st-key-hero .stMarkdown,
+.st-key-hero .stMarkdown p { text-align: center; color: #FFFFFF; }
+.st-key-hero [data-testid="stHeading"] h1 {
+  font-size: clamp(1.9rem, 5.5vw, 3.2rem);
+  /* Break only between words, never inside one. */
+  word-break: keep-all; overflow-wrap: normal; hyphens: none;
+}
+/* Streamlit dims captions (opacity 0.6); inside the hero that would break the 4.5:1 contrast. */
+.st-key-hero [data-testid="stCaptionContainer"] { opacity: 1; }
+.st-key-hero [data-testid="stCaptionContainer"] p { color: #FFFFFF; }
+.st-key-hero .stMarkdown p { max-width: 46rem; margin-inline: auto; font-size: 1.05rem; }
+.st-key-hero strong { color: #FFFFFF; }
+.st-key-hero [data-testid="stHeaderActionElements"] { display: none; }   /* no link icon */
+/* Divider under the hero, inside the band */
+.st-key-hero .wine-divider { filter: brightness(1.6); }
+
+/* ---- Ornamental divider ---------------------------------------------------------------- */
+.wine-divider {
+  height: 28px; margin: 0.6rem auto 0.4rem;
+  background: var(--wine-divider) center / auto 28px no-repeat;
+}
+/* The same divider under the main headings inside the tabs */
+[data-testid="stTabs"] [data-testid="stHeading"] h3::after,
+[data-testid="stTabs"] .stMarkdown h2::after {
+  content: ""; display: block; height: 22px; margin-top: 0.35rem;
+  background: var(--wine-divider) right / auto 22px no-repeat;
+}
+
+/* ---- Buttons: thin bordeaux outline, filled only on hover ------------------------------ */
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"],
+[data-testid="stDownloadButton"] button {
+  background: transparent; color: var(--wine-bordeaux);
+  border: 1px solid var(--wine-bordeaux); border-radius: 2px;
+}
+[data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-secondary"]:hover,
+[data-testid="stDownloadButton"] button:hover,
+[data-testid="stBaseButton-primary"]:focus-visible, [data-testid="stBaseButton-secondary"]:focus-visible,
+[data-testid="stDownloadButton"] button:focus-visible {
+  background: var(--wine-bordeaux); color: #FFFFFF; border-color: var(--wine-bordeaux);
+}
+[data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-secondary"] p { color: inherit; }
+
+/* ---- Top 3 value wines ----------------------------------------------------------------- */
+.st-key-top3 [data-testid="stHeading"] h3 { text-align: center; }
+.st-key-top3 [data-testid="stHeading"] h3::after { background-position: center; }
+[class*="st-key-top_wine_"] {
+  background: var(--wine-card); border-top: 2px solid var(--wine-gold) !important;
+  text-align: center; height: 100%;
+}
+[class*="st-key-top_wine_"] .stMarkdown p { text-align: center; }
+.wine-name { font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.05rem; direction: ltr; }
+.wine-price { color: var(--wine-bordeaux); font-size: 1.35rem; font-weight: 500; }
+
+/* ---- Footer ---------------------------------------------------------------------------- */
+.wine-footer {
+  margin-top: 3rem; padding: 1.25rem 0 0.5rem; border-top: 1px solid var(--wine-gold);
+  text-align: center; font-size: 0.9rem; color: #4A403A;   /* 9:1 on cream */
+}
+.wine-footer a { color: var(--wine-bordeaux); }
+
+/* ---- Mobile (narrow screens) ----------------------------------------------------------- */
+/* Metrics wrap instead of being cut ("2026-11-18 0..."). */
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] > div {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+  .st-key-hero { padding: 3rem 1rem 2.25rem; }
+  .st-key-hero .stMarkdown p { font-size: 0.95rem; }
+  [data-testid="stMetricValue"] { font-size: 1.4rem; }
+}
