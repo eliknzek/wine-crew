@@ -41,6 +41,12 @@ def _rel(path: Path | str) -> str:
 # --------------------------------------------------------------------------- cost and logging
 
 
+def utc_stamp(moment: datetime | None = None) -> str:
+    """UTC time as 2026-11-19T10:34:51Z, the format of every timestamp the run writes."""
+    moment = moment or datetime.now(timezone.utc)
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def crew_cost(token_usage: dict[str, Any] | None, config: dict[str, Any]) -> float:
     """USD cost of one crew from its token usage and llm.price_per_million in config."""
     if not token_usage:
@@ -243,8 +249,8 @@ def _summary(state: WineState, config: dict[str, Any], status: str, started: dat
     summary = {
         "run_id": state.run_id,
         "status": status,
-        "started_at": started.isoformat(timespec="seconds"),
-        "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "started_at": utc_stamp(started),
+        "finished_at": utc_stamp(),
         "seconds": round(seconds, 1),
         "raw_sha256": state.raw_sha256,
         "rows": state.rows,

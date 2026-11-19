@@ -280,3 +280,15 @@ def test_crew_exception_is_a_controlled_stop(flow_config, capsys):
     s, log = _assert_stopped(flow_config, capsys, code, "crew1",
                              "RuntimeError: Task failed guardrail validation after 0 retries.")
     assert "Traceback" in log                  # the traceback goes to the log only
+
+
+def test_timestamps_are_utc_with_z(flow_config, capsys):
+    from wine_crew.flow import utc_stamp
+    from datetime import datetime, timezone, timedelta
+
+    assert utc_stamp(datetime(2026, 11, 19, 12, 34, 51, tzinfo=timezone(timedelta(hours=2)))) == "2026-11-19T10:34:51Z"
+    assert run_flow(flow_config, stub_analyst(), stub_scientist()) == 0
+    s = _summary(flow_config)
+    stamp = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
+    assert re.fullmatch(stamp, s["started_at"]) and re.fullmatch(stamp, s["finished_at"])
+    assert all(re.match(stamp + " ", line) for line in _log_text(flow_config).splitlines() if line.strip())
