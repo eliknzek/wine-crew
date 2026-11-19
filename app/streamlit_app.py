@@ -162,7 +162,8 @@ def wine_cards(wines: pd.DataFrame, key_prefix: str) -> None:
         with col, st.container(border=True, key=f"{key_prefix}_{i}"):
             st.markdown(f'<span class="wine-name">{html.escape(wine.title)}</span>', unsafe_allow_html=True)
             st.markdown(f'<span class="wine-price">{ad.money(wine.price)}</span>', unsafe_allow_html=True)
-            st.markdown(f"{ad.score_text(wine.points)} · ציון שווי {ad.signed(wine.value_score)}")
+            st.markdown(f"{ad.score_text(wine.points)} · ציון שווי {ad.signed_html(wine.value_score)}",
+                        unsafe_allow_html=True)
 
 
 def wine_card_html(wine) -> str:
@@ -174,7 +175,7 @@ def wine_card_html(wine) -> str:
             f'<div class="wine-highlight"><span class="wine-price">{ad.money(wine["price"])}</span>'
             f'<span>ניקוד בפועל: <strong>{html.escape(ad.score_text(wine["points"]))}</strong></span>'
             f'<span>ניקוד צפוי: {wine["predicted"]:.1f}</span>'
-            f'<span>ציון שווי <strong>{ad.signed(wine["value_score"])}</strong></span></div>')
+            f'<span>ציון שווי <strong>{ad.signed_html(wine["value_score"])}</strong></span></div>')
 
 
 def _missing(name: str) -> None:
@@ -254,8 +255,8 @@ with value_tab:
             })
         if len(result):
             first = result.iloc[0]
-            st.caption(f"לדוגמה, ליין הראשון ציון שווי {ad.signed(first['value_score'])}, כלומר "
-                       f"{ad.value_sentence(first['value_score'])}.")
+            st.caption(f"לדוגמה, ליין הראשון ציון שווי {ad.signed_html(first['value_score'])}, כלומר "
+                       f"{ad.value_sentence(first['value_score'])}.", unsafe_allow_html=True)
             st.download_button("הורדת הרשימה (CSV)", ad.ranking_csv(result), file_name="value_wines.csv",
                                mime="text/csv", key="value_csv")
             rows = event.selection.rows if event is not None else []
@@ -266,8 +267,8 @@ with value_tab:
                 pct, count = ad.variety_percentile(ranking, wine["variety"], wine["value_score"])
                 with st.container(border=True, key="wine_card"):
                     st.html(wine_card_html(wine))
-                    st.markdown(f"ציון שווי {ad.signed(wine['value_score'])}, כלומר "
-                                f"{ad.value_sentence(wine['value_score'])}.")
+                    st.markdown(f"ציון שווי {ad.signed_html(wine['value_score'])}, כלומר "
+                                f"{ad.value_sentence(wine['value_score'])}.", unsafe_allow_html=True)
                     st.markdown(ad.variety_rank_sentence(pct, wine["variety"], count))
 
 # --------------------------------------------------------------------------- check a wine
@@ -336,7 +337,8 @@ with predict_tab:
                 st.caption(f"עד 5 יינות במחיר בין {ad.money(price / 1.5)} ל-{ad.money(price * 1.5)}, "
                            "עם ציון השווי הגבוה ביותר.")
                 if len(similar):
-                    wine_cards(similar, "similar_wine")
+                    with st.container(key="similar_cards"):
+                        wine_cards(similar, "similar_wine")
                 note = ad.similar_note(levels, country, variety)
                 if note:
                     st.caption(note)

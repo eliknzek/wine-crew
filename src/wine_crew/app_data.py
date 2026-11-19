@@ -401,6 +401,13 @@ def signed(value: float) -> str:
     return f"\u2066{float(value):+.1f}\u2069"
 
 
+def signed_html(value: float) -> str:
+    """'+9.1' inside an HTML <bdi dir="ltr"> element as well: an element-level isolate keeps the
+    sign before the number in Hebrew text even where the Unicode isolate characters alone are not
+    honored (seen on mobile next to "כלומר"). For text rendered as HTML."""
+    return f'<bdi dir="ltr">{signed(value)}</bdi>'
+
+
 def model_mae(metrics: dict[str, Any]) -> float:
     """Test MAE of the selected model."""
     return float(metrics["models"][metrics["selected"]]["test"]["mae"])

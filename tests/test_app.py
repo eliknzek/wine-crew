@@ -349,6 +349,11 @@ def test_wine_card_after_selecting_a_row(app):
     assert html.escape(ad.score_text(first["points"])) in header and ad.signed(first["value_score"]) in header
     assert f"ניקוד צפוי: {first['predicted']:.1f}" in header
     assert any(ad.value_sentence(first["value_score"]) in t for t in text)
+    # The signed number next to the value sentence is isolated, in the card and in the example
+    # caption under the table (otherwise the sign jumps to the wrong side in Hebrew text).
+    isolated = f"ציון שווי {ad.signed_html(first['value_score'])}, כלומר {ad.value_sentence(first['value_score'])}."
+    assert isolated in text
+    assert any(isolated in c.value for c in card.caption)
     pct, count = ad.variety_percentile(ranking, first["variety"], first["value_score"])
     assert ad.variety_rank_sentence(pct, first["variety"], count) in text
 

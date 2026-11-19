@@ -25,6 +25,11 @@ def test_signed_keeps_sign_with_number():
     assert ad.signed(9.081) == "\u2066+9.1\u2069" and ad.signed(-0.42) == "\u2066-0.4\u2069"
 
 
+def test_signed_html_isolates_the_signed_number():
+    assert ad.signed_html(8.94) == '<bdi dir="ltr">\u2066+8.9\u2069</bdi>'
+    assert ad.signed_html(-0.42) == '<bdi dir="ltr">\u2066-0.4\u2069</bdi>'
+
+
 def test_value_sentence():
     assert ad.value_sentence(9.081) == "9.1 נקודות מעל הניקוד שצפוי ליין כזה במחיר הזה"
     assert ad.value_sentence(-0.42) == "0.4 נקודות מתחת לניקוד שצפוי ליין כזה במחיר הזה"
