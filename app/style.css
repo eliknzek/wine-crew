@@ -7,7 +7,13 @@
 
 /* ---- Variables ------------------------------------------------------------------------- */
 :root {
-  --wine-red: #6E0F1A;           /* deep wine red: headings, prices, buttons (11:1 on cream) */
+  --wine-red: #6E0F1A;
+  --wine-ok: #3E6B48;            /* vine-leaf green for "passed" icons (>= 3:1, tested) */
+  --wine-muted: #8A7A6E;         /* "not run" and muted chart points (>= 3:1, tested) */
+  /* Heading font for custom classes; Streamlit's own headings use headingFont in config.toml. */
+  --heading-font: "Frank Ruhl Libre", serif;
+  /* One inner padding for every white card and container (16px on narrow screens). */
+  --card-pad: 24px;           /* deep wine red: headings, prices, buttons (11:1 on cream) */
   --wine-gold: #C9A227;          /* decoration only, never text (contrast 2.2:1 on cream) */
   --wine-cream: #F7F4EF;
   --wine-card: #FFFFFF;
@@ -28,6 +34,10 @@
 [data-testid="stHeading"], [data-testid="stHeading"] h1, [data-testid="stHeading"] h2,
 [data-testid="stHeading"] h3, [data-testid="stCaptionContainer"] { direction: rtl; text-align: right; }
 [data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
+/* Charts draw their own text in SVG: with an inherited direction: rtl the text anchors flip and
+   axis labels and legends land inside the plot. Keep the chart itself LTR (Hebrew strings still
+   read right to left). */
+[data-testid="stVegaLiteChart"] { direction: ltr; }
 /* Dropdown lists open in a popover outside the widget, so target the dropdown itself. */
 [data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] { direction: rtl; }
 [data-testid="stSelectboxVirtualDropdown"] [role="option"],
@@ -72,7 +82,7 @@
 .st-key-hero [data-testid="stCaptionContainer"] p { color: #FFFFFF; }
 .st-key-hero .stMarkdown p { max-width: 46rem; margin-inline: auto; font-size: 1.05rem; }
 .st-key-hero strong { color: #FFFFFF; }
-.st-key-hero [data-testid="stHeaderActionElements"] { display: none; }   /* no link icon */
+[data-testid="stHeaderActionElements"] { display: none; }   /* no link (anchor) icon next to headings */
 /* Divider under the hero, inside the band */
 .st-key-hero .wine-divider { filter: brightness(1.6); }
 
@@ -85,7 +95,8 @@
 [data-testid="stTabs"] [data-testid="stHeading"] h3::after,
 [data-testid="stTabs"] .stMarkdown h2::after {
   content: ""; display: block; height: 22px; margin-top: 0.35rem;
-  background: var(--wine-divider) right / auto 22px no-repeat;
+  /* Fixed width, at the start of the heading (right in RTL), whatever the heading's length. */
+  width: 120px; background: var(--wine-divider) center / 120px auto no-repeat;
 }
 
 /* ---- Buttons: thin wine-red outline, filled only on hover ------------------------------ */
@@ -104,36 +115,18 @@
 
 /* ---- Top 3 value wines ----------------------------------------------------------------- */
 .st-key-top3 [data-testid="stHeading"] h3 { text-align: center; }
-.st-key-top3 [data-testid="stHeading"] h3::after { background-position: center; }
+.st-key-top3 [data-testid="stHeading"] h3::after { margin-inline: auto; }   /* this heading is centered */
 [class*="st-key-top_wine_"] {
   background: var(--wine-card); border-top: 2px solid var(--wine-gold) !important;
   text-align: center; height: 100%;
 }
 [class*="st-key-top_wine_"] .stMarkdown p { text-align: center; }
-.wine-name { font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.05rem; direction: ltr; }
+.wine-name { font-family: var(--heading-font); font-weight: 700; font-size: 1.05rem; direction: ltr; }
 .wine-price { color: var(--wine-red); font-size: 1.35rem; font-weight: 500; }
 
 /* ---- Large headings in deep wine red (the hero title stays white) ---------------------- */
 [data-testid="stTabs"] [data-testid="stHeading"] h3, [data-testid="stTabs"] .stMarkdown h1,
 [data-testid="stTabs"] .stMarkdown h2 { color: var(--wine-red); }
-
-/* ---- Guide: four arch frames under the hero, one per tab (explanation only, not buttons) */
-.wine-guide {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 14rem)); justify-content: center;
-  gap: 1.25rem; margin: 1.75rem 0 0.5rem; direction: rtl;
-}
-.wine-arch {
-  /* An arch: a half-circle top (radius = half the width) over straight sides. */
-  border: 1px solid var(--wine-gold); border-radius: 7rem 7rem 6px 6px;
-  background: var(--wine-card); padding: 2.4rem 1rem 1.1rem; text-align: center;
-}
-.wine-arch-icon { width: 46px; height: 46px; margin: 0 auto 0.5rem; background: center / contain no-repeat; }
-.icon-find { background-image: url("{{SVG:icon-find}}"); }
-.icon-check { background-image: url("{{SVG:icon-check}}"); }
-.icon-learned { background-image: url("{{SVG:icon-learned}}"); }
-.icon-how { background-image: url("{{SVG:icon-how}}"); }
-.wine-arch-title { font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.1rem; color: var(--wine-red); }
-.wine-arch p { margin: 0.35rem 0 0; font-size: 0.88rem; line-height: 1.45; }
 
 /* ---- Small wine cards ("3 היינות השווים ביותר", "אולי תאהבו גם") ------------------------ */
 [class*="st-key-similar_wine_"] {
@@ -153,10 +146,10 @@
 /* ---- Wine card in product-page style, with a faint grape drawing behind ---------------- */
 .st-key-wine_card {
   background: var(--wine-card) var(--wine-grapes) left 1.5rem center / auto 85% no-repeat;
-  border-top: 2px solid var(--wine-gold) !important; padding: 1.25rem 1.5rem !important;
+  border-top: 2px solid var(--wine-gold) !important;
 }
 .wine-card-title {
-  font-family: "Frank Ruhl Libre", serif; font-weight: 700; color: var(--wine-red);
+  font-family: var(--heading-font); font-weight: 700; color: var(--wine-red);
   font-size: clamp(1.4rem, 3.2vw, 2rem); line-height: 1.25; direction: ltr; text-align: right;
   unicode-bidi: plaintext; margin: 0.1rem 0 0.9rem;
 }
@@ -188,16 +181,128 @@
 .no-results {
   display: flex; align-items: center; gap: 1.5rem; direction: rtl;
   background: var(--wine-card); border-top: 2px solid var(--wine-gold);
-  padding: 1.25rem 1.5rem; margin: 0.5rem 0 1rem;
+  margin: 0.5rem 0 1rem;
 }
 .no-results-text { flex: 1 1 auto; }
-.no-results-title { font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.3rem; color: var(--wine-red); }
+.no-results-title { font-family: var(--heading-font); font-weight: 700; font-size: 1.3rem; color: var(--wine-red); }
 .no-results-text p { margin: 0.4rem 0 0; }
 /* The photo is the background of an element that exists only in this state, so it is fetched
    only when there are no results. */
 .no-results-img {
   flex: 0 0 200px; height: 260px; border-radius: 4px;
   background: url("app/static/glass-vineyard-portrait.webp") center / cover no-repeat;
+}
+
+/* ---- Dashboard: KPI tiles and chart cards ("מה למדנו", "איך זה עובד") -------------------- */
+[class*="st-key-kpis_"] { margin: 0.5rem 0 1.25rem; }
+[class*="st-key-kpis_"] [data-testid="stMetric"] {
+  background: var(--wine-card); border-top: 2px solid var(--wine-gold);
+}
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] p { font-size: 0.9rem; color: #4A403A; }   /* 9:1 */
+/* The label grid takes the tile's full width (it shrank to ~100px of 131px at 375px, so labels
+   broke into three lines); the text takes the room left by the help icon. */
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] {
+  width: 100% !important; grid-template-columns: minmax(0, 1fr) auto !important;
+}
+/* Streamlit's bordered metric adds its own 15px inside the tile, on top of --card-pad: remove
+   it, so the tile has one padding (and the label gets the room it needs at 375px). */
+[class*="st-key-kpis_"] [data-testid="stMetric"] > div { padding-left: 0 !important; padding-right: 0 !important; }
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] > div,
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"] {
+  width: 100% !important; max-width: 100% !important;
+}
+/* Labels and the delta line wrap instead of being cut with "…" (Streamlit keeps them on one line). */
+[class*="st-key-kpis_"] [data-testid="stMetricDelta"], [class*="st-key-kpis_"] [data-testid="stMetricDelta"] *,
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"], [class*="st-key-kpis_"] [data-testid="stMetricLabel"] * {
+  white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+  height: auto !important; line-height: 1.35;
+}
+[class*="st-key-kpis_"] [data-testid="stMetricValue"] {
+  color: var(--wine-red); font-family: var(--heading-font); font-weight: 700;
+  font-size: clamp(1.35rem, 2.1vw, 1.9rem);   /* fits six tiles in 1200px with 24px padding */
+}
+/* Tiles in one row: equal height. */
+[class*="st-key-kpis_"] [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+[class*="st-key-kpis_"] [data-testid="stColumn"] [data-testid="stLayoutWrapper"],
+[class*="st-key-kpis_"] [data-testid="stColumn"] [class*="st-key-kpi_"] { height: 100%; }
+[class*="st-key-kpis_"] [data-testid="stColumn"] [data-testid="stElementContainer"],
+[class*="st-key-kpis_"] [data-testid="stMetric"] { height: 100%; }
+[class*="st-key-chart_"], [class*="st-key-card_"] {
+  background: var(--wine-card); border-top: 2px solid var(--wine-gold) !important;
+}
+.card-title {
+  font-family: var(--heading-font); font-weight: 700; font-size: 1.15rem;
+  color: var(--wine-red); margin-bottom: 0.25rem;
+}
+.section-title {
+  font-family: var(--heading-font); font-weight: 700; font-size: 1.45rem;
+  color: var(--wine-red); margin: 1.25rem 0 0.25rem;
+}
+.st-key-card_recommendations { border: 1px solid var(--wine-gold) !important; }
+/* Cards in one dashboard row get equal height (same chain as the wine cards above). */
+[class*="st-key-dash_row_"] [data-testid="stColumn"] > [data-testid="stVerticalBlock"] { height: 100%; }
+[class*="st-key-dash_row_"] [data-testid="stColumn"] [data-testid="stLayoutWrapper"] { flex: 1 1 auto; }
+[class*="st-key-dash_row_"] [class*="st-key-chart_"], [class*="st-key-dash_row_"] [class*="st-key-card_"] { height: 100%; }
+
+/* ---- Lists: space by direction, so bullets sit inside the card (right side in RTL) ------- */
+.stMarkdown ul, .stMarkdown ol {
+  padding-left: 0; padding-right: 0; padding-inline-start: 1.5em; margin-inline-start: 0.25em;
+}
+.stMarkdown li { padding-inline-start: 0.25em; }
+
+/* ---- One inner padding for all white cards and containers -------------------------------- */
+[class*="st-key-chart_"], [class*="st-key-card_"], [class*="st-key-top_wine_"],
+[class*="st-key-similar_wine_"], .st-key-wine_card, [class*="st-key-kpis_"] [data-testid="stMetric"],
+.no-results { padding: var(--card-pad) !important; }
+/* Chart toolbar (fullscreen / download) on the chart's left corner, not over the card title. */
+[data-testid="stElementToolbar"] { right: auto !important; left: 0 !important; }
+
+/* ---- Tabs with line icons (they replace the former arch guide) ------------------------- */
+[data-testid="stTabs"] [role="tablist"] { gap: 0.25rem; }
+[data-testid="stTabs"] [data-testid="stTab"] {
+  display: flex; align-items: center; height: auto; padding: 0.8rem 1.25rem; gap: 0.55rem;
+  border-radius: 4px 4px 0 0; cursor: pointer;
+  background: transparent; transition: background-color 0.15s;
+}
+[data-testid="stTabs"] [data-testid="stTab"] p { font-size: 1.05rem; font-weight: 500; }
+[data-testid="stTabs"] [data-testid="stTab"]::before {
+  content: ""; width: 22px; height: 22px; flex: none; background: center / contain no-repeat;
+}
+[data-testid="stTabs"] [data-testid="stTab"]:nth-child(1)::before { background-image: url("{{SVG:icon-find}}"); }
+[data-testid="stTabs"] [data-testid="stTab"]:nth-child(2)::before { background-image: url("{{SVG:icon-check}}"); }
+[data-testid="stTabs"] [data-testid="stTab"]:nth-child(3)::before { background-image: url("{{SVG:icon-learned}}"); }
+[data-testid="stTabs"] [data-testid="stTab"]:nth-child(4)::before { background-image: url("{{SVG:icon-how}}"); }
+[data-testid="stTabs"] [data-testid="stTab"]:hover { background: #EFE8DD; }
+[data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p { color: var(--wine-red); font-weight: 700; }
+/* The active-tab bar (react-aria selection indicator, a child of the selected tab) in gold. */
+[data-testid="stTabs"] [data-testid="stTab"] .react-aria-SelectionIndicator {
+  background-color: var(--wine-gold) !important; height: 3px !important;
+}
+[data-testid="stTabs"] [role="tablist"]::after { background-color: var(--wine-gold); opacity: 0.6; }
+
+/* ---- Status icons (drawn SVG, no emoji) ------------------------------------------------- */
+.flow-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; direction: rtl; }
+.flow-step { display: inline-flex; align-items: center; gap: 0.35rem; }
+.flow-step::before { content: ""; width: 20px; height: 20px; flex: none; background: center / contain no-repeat; }
+.step-passed::before { background-image: url("{{SVG:status-passed}}"); }
+.step-failed::before { background-image: url("{{SVG:status-failed}}"); }
+.step-not_run::before { background-image: url("{{SVG:status-not-run}}"); }
+.step-not_run { color: #6B5E55; }
+.flow-arrow { color: var(--wine-gold); font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Status tile: the icon on the same line, before the word. */
+.st-key-kpi_status_passed [data-testid="stMetricValue"],
+.st-key-kpi_status_failed [data-testid="stMetricValue"] { display: flex; align-items: center; gap: 0.3em; direction: rtl; }
+.st-key-kpi_status_passed [data-testid="stMetricValue"]::before,
+.st-key-kpi_status_failed [data-testid="stMetricValue"]::before {
+  content: ""; width: 0.85em; height: 0.85em; flex: none; background: center / contain no-repeat;
+}
+.st-key-kpi_status_passed [data-testid="stMetricValue"]::before { background-image: url("{{SVG:status-passed}}"); }
+.st-key-kpi_status_failed [data-testid="stMetricValue"]::before { background-image: url("{{SVG:status-failed}}"); }
+/* Hero title: the drawn glass instead of an emoji */
+.st-key-hero [data-testid="stHeading"] h1::before {
+  content: ""; display: inline-block; width: 0.9em; height: 0.9em; margin-inline-end: 0.3em;
+  vertical-align: -0.1em; background: url("{{SVG:icon-glass-light}}") center / contain no-repeat;
 }
 
 /* ---- Footer ---------------------------------------------------------------------------- */
@@ -213,8 +318,13 @@
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
 }
 @media (max-width: 640px) {
-  .wine-guide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
-  .wine-arch { border-radius: 5rem 5rem 6px 6px; padding: 1.8rem 0.6rem 0.9rem; }
+  :root { --card-pad: 16px; }
+  /* Tabs: four equal columns, icon above the label, so they fit without side scrolling. */
+  [data-testid="stTabs"] [role="tablist"] { gap: 0; }
+  [data-testid="stTabs"] [data-testid="stTab"] {
+    flex: 1 1 0; min-width: 0; flex-direction: column; padding: 0.55rem 0.2rem; gap: 0.25rem;
+  }
+  [data-testid="stTabs"] [data-testid="stTab"] p { font-size: 0.8rem; white-space: normal; text-align: center; line-height: 1.2; }
   .wine-props { grid-template-columns: 1fr; }
   /* Cards stacked one per row: natural height, no stretching. */
   .st-key-top3 [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
@@ -229,6 +339,16 @@
   .st-key-hero { padding: 3rem var(--page-pad) 2.25rem; }
   .st-key-hero .stMarkdown p { font-size: 0.95rem; }
   [data-testid="stMetricValue"] { font-size: 1.4rem; }
+  /* KPI tiles: 2 per row (Streamlit would stack every column on its own row). */
+  [class*="st-key-kpis_"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.75rem; }
+  [class*="st-key-kpis_"] [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 0.75rem) !important; min-width: calc(50% - 0.75rem) !important;
+    width: calc(50% - 0.75rem) !important;
+  }
+  /* Dashboard cards stacked: natural height. */
+  [class*="st-key-dash_row_"] [data-testid="stColumn"] > [data-testid="stVerticalBlock"] { height: auto; }
+  [class*="st-key-dash_row_"] [data-testid="stColumn"] [data-testid="stLayoutWrapper"] { flex: none; }
+  [class*="st-key-dash_row_"] [class*="st-key-chart_"], [class*="st-key-dash_row_"] [class*="st-key-card_"] { height: auto; }
   /* Decorative photos smaller on phones */
   .tab-band { height: 64px; margin-bottom: 0.75rem; }
   .no-results { flex-direction: column; align-items: stretch; text-align: right; gap: 0.75rem; }

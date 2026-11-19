@@ -63,3 +63,23 @@ def test_reload_evicts_only_after_a_change(fake_package):
 def test_first_call_without_loaded_package_does_nothing(fake_package):
     assert "fakepkg" not in sys.modules
     assert code_reload.reload_if_changed(fake_package) is False
+
+
+
+def test_a_changed_app_module_evicts_it_with_the_package(fake_package, tmp_path):
+    """app/charts.py-style modules: a change there evicts the package and the module."""
+    helper = tmp_path / "helper_mod.py"
+    helper.write_text("X = 1\n")
+    modules = {"helper_mod": helper}
+    import helper_mod  # noqa: F401
+    import fakepkg.mod  # noqa: F401
+    assert code_reload.reload_if_changed(fake_package, app_modules=modules) is True   # first: loaded, evict
+    import helper_mod  # noqa: F401,F811
+    import fakepkg.mod  # noqa: F401,F811
+    assert code_reload.reload_if_changed(fake_package, app_modules=modules) is False  # unchanged
+    later = time.time_ns() + 5_000_000_000
+    helper.write_text("X = 22\n")
+    os.utime(helper, ns=(later, later))
+    assert code_reload.reload_if_changed(fake_package, app_modules=modules) is True
+    assert "helper_mod" not in sys.modules and "fakepkg" not in sys.modules
+    sys.modules.pop("helper_mod", None)

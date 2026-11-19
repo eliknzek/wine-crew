@@ -1,6 +1,8 @@
 """The Streamlit app loads and its prediction form works (streamlit.testing.v1.AppTest)."""
 
 import html
+import json
+import re
 from pathlib import Path
 
 import pytest
@@ -147,7 +149,7 @@ def test_model_table_shows_zero_not_negative_zero(app):
 
 
 def test_title_is_hebrew_and_page_title_stays(app):
-    assert app.title[0].value == "🍷 ניקוד יינות ויינות ששווים את מחירם"
+    assert app.title[0].value == "ניקוד יינות ויינות ששווים את מחירם"   # no emoji: the glass is CSS
     assert app.caption[0].value.startswith("wine-crew · כל המספרים")
     source = open(APP, encoding="utf-8").read()
     assert 'page_title="wine-crew"' in source
@@ -172,7 +174,7 @@ def test_new_artifacts_load_without_clearing_the_cache(tmp_path, monkeypatch):
     import code_reload
 
     # Record the current code fingerprint so the app does not evict our patched module.
-    setattr(sys, code_reload._STATE_ATTR, code_reload.code_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    setattr(sys, code_reload._STATE_ATTR, code_reload.current_fingerprint(REPO_ROOT / "src" / "wine_crew"))
     art = tmp_path / "artifacts"
     shutil.copytree(REPO_ROOT / "artifacts", art)
     config = load_config()
@@ -224,7 +226,10 @@ def test_every_former_item_is_still_shown(app):
     assert any(e.label.startswith("דוח ההערכה המלא") for e in how.expander)
     # was "ניתוח"
     assert any("ניקוד חציוני" in m.value for m in learned.markdown)
-    assert len(learned.get("image")) == len(ad.chart_paths(CONFIG)) == 7
+    # The 7 EDA charts: each has an interactive version (by_country feeds two: the value scatter and
+    # the share bars), except missing_values, which has no data in the artifacts and stays a PNG.
+    assert len(ad.chart_paths(CONFIG)) == 7
+    assert len(learned.get("vega_lite_chart")) == 7 and len(learned.get("image")) == 1
     assert len(learned.get("download_button")) == 1
     # was "מציאת שווים למחיר"
     assert any("value_score" in d.value.columns for d in find.dataframe)
@@ -270,8 +275,9 @@ def test_value_table_has_label_signed_score_and_help(app):
 def test_flow_diagram(app):
     how = _tab(app, "איך זה עובד")
     summary = ad.load_all(CONFIG)["summary"]
-    line = next(m.value for m in how.markdown if "←" in m.value)
-    assert line == ad.flow_line(ad.flow_steps(summary)) and line.count("✅") == 6
+    line = next(h.proto.body for h in how.get("html") if "flow-line" in h.proto.body)
+    assert line == ad.flow_html(ad.flow_steps(summary))
+    assert line.count('class="flow-step step-passed"') == 6
     text = " ".join(m.value for m in how.markdown)
     for crew in ("crew1", "crew2"):
         for _, role in ad.agent_roles(crew):
@@ -377,15 +383,13 @@ def _cards(app, tab_label="מצא יין שווה", prefix="top_wine_"):
     return blocks
 
 
-def test_guide_has_four_arches(app):
-    guide = [h.proto.body for h in app.get("html") if "wine-guide" in h.proto.body and "<style>" not in h.proto.body]
-    assert len(guide) == 1
-    body = guide[0]
-    assert body.count('class="wine-arch"') == 4
-    for icon, title in (("icon-find", "מצא יין שווה"), ("icon-check", "בדוק יין"),
-                        ("icon-learned", "מה למדנו"), ("icon-how", "איך זה עובד")):
-        assert f"wine-arch-icon {icon}" in body and f'<div class="wine-arch-title">{title}</div>' in body
-    assert "<button" not in body and "<a " not in body                     # explanation only
+def test_tabs_carry_the_icons_and_the_guide_is_gone(app):
+    """The four tabs get the drawn icons (CSS, in tab order); the former arch guide is removed."""
+    css = next(h.proto.body for h in app.get("html") if "<style>" in h.proto.body)
+    for n in range(1, 5):
+        assert f'[data-testid="stTab"]:nth-child({n})::before {{ background-image: url("data:image/svg+xml,' in css
+    assert not any("wine-guide" in h.proto.body or "wine-arch" in h.proto.body for h in app.get("html"))
+    assert [t.label for t in app.tabs] == TABS
 
 
 def test_top3_cards_match_the_first_table_rows(app):
@@ -471,3 +475,160 @@ def test_no_results_state(app):
     assert len(block) == 1 and "לא נמצאו יינות" in block[0] and "no-results-img" in block[0]
     assert not any("value_score" in d.value.columns for d in find.dataframe)   # no empty table
     assert not find.get("download_button")
+
+
+CHART_CARDS = {"price_curve": "vega", "countries": "vega", "varieties": "vega", "share": "vega",
+               "missing": "image", "points_hist": "vega", "price_bars": "vega", "vintage": "vega"}
+
+
+def _keyed(app, tab_label, key):
+    found = []
+
+    def walk(node):
+        for child in getattr(node, "children", {}).values():
+            if (getattr(getattr(child, "proto", None), "id", "") or "").endswith(key):
+                found.append(child)
+            walk(child)
+
+    walk(_tab(app, tab_label))
+    return found[0] if found else None
+
+
+def _all(node, kind):
+    out = []
+
+    def walk(n):
+        for child in getattr(n, "children", {}).values():
+            if getattr(child, "type", None) == kind:
+                out.append(child)
+            walk(child)
+
+    walk(node)
+    return out
+
+
+def test_learned_kpi_tiles_come_from_eda_summary(app):
+    eda = ad.load_all(CONFIG)["eda_summary"]
+    tiles = _keyed(app, "מה למדנו", "kpis_learned")
+    assert [(m.label, m.value) for m in _all(tiles, "metric")] == \
+        [(t["label"], t["value"]) for t in ad.learned_kpis(eda)]
+    values = [m.value for m in _all(tiles, "metric")]
+    assert values[0] == f"{eda['row_count']:,}" and values[1] == ad.money(eda["overall_median_price"])
+
+
+def test_top3_share_tile_matches_insights(app):
+    """One fact, one number: the tile shows the same whole percent as the bias line of insights.md."""
+    data = ad.load_all(CONFIG)
+    written = ad.bias_share_percent(ad.insight_sections(data["insights"])[2])
+    tiles = _keyed(app, "מה למדנו", "kpis_learned")
+    share = next(m.value for m in _all(tiles, "metric") if m.label == "משלוש המדינות המובילות")
+    assert written is not None and share == f"{written}%"
+
+
+def test_how_kpi_tiles(app):
+    data = ad.load_all(CONFIG)
+    tiles = _keyed(app, "איך זה עובד", "kpis_how")
+    metrics = _all(tiles, "metric")
+    expected = ad.how_kpis(data["summary"], data["metrics"])
+    assert [(m.label, m.value) for m in metrics] == [(t["label"], t["value"]) for t in expected]
+    assert len(metrics) == 6
+
+
+def test_each_chart_card_has_one_chart(app):
+    for key, kind in CHART_CARDS.items():
+        card = _keyed(app, "מה למדנו", f"chart_{key}")
+        assert card is not None, key
+        vega, images = _all(card, "vega_lite_chart"), _all(card, "image")
+        assert (len(vega), len(images)) == ((1, 0) if kind == "vega" else (0, 1)), key
+
+
+def test_every_insight_is_still_shown(app):
+    text = " ".join(m.value for m in _all(_tab(app, "מה למדנו"), "markdown"))
+    for section in ad.insight_sections(ad.load_all(CONFIG)["insights"]):
+        for line in section.splitlines():
+            line = line.strip().lstrip("-# ").strip()
+            if line:
+                assert ad.localize_countries(line) in text, line
+
+
+def _artifacts_copy(tmp_path, monkeypatch, drop=()):
+    import shutil
+    import sys
+
+    import wine_crew.config as cfg_module
+
+    sys.path.insert(0, str(REPO_ROOT / "app"))
+    import code_reload
+
+    setattr(sys, code_reload._STATE_ATTR, code_reload.current_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    art = tmp_path / "artifacts"
+    shutil.copytree(REPO_ROOT / "artifacts", art)
+    for rel in drop:
+        (art / rel).unlink()
+    config = load_config()
+    config["paths"] = {**config["paths"],
+                       **{k: str(art / v.removeprefix("artifacts/")) for k, v in config["paths"].items()
+                          if isinstance(v, str) and v.startswith("artifacts/")},
+                       "artifacts_analyst": str(art / "analyst"), "artifacts_scientist": str(art / "scientist")}
+    monkeypatch.setattr(cfg_module, "load_config", lambda path=None: config)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+def test_charts_fall_back_to_png_without_eda_summary(tmp_path, monkeypatch):
+    at = _artifacts_copy(tmp_path, monkeypatch, drop=["analyst/eda_summary.json"])
+    learned = _tab(at, "מה למדנו")
+    assert any("eda_summary.json לא נמצא" in i.value for i in learned.info)
+    assert _keyed(at, "מה למדנו", "kpis_learned") is None
+    # every eda_summary chart is now its PNG; the score histogram still comes from value_ranking.csv
+    assert len(learned.get("image")) == 6 and len(learned.get("vega_lite_chart")) == 1
+
+
+def test_missing_files_show_messages_not_errors(tmp_path, monkeypatch):
+    at = _artifacts_copy(tmp_path, monkeypatch, drop=["run_summary.json", "scientist/metrics.json"])
+    how = _tab(at, "איך זה עובד")
+    assert _keyed(at, "איך זה עובד", "kpis_how") is None
+    assert len(how.warning) >= 2
+
+
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u23E9-\u23FA\u2B50\u2B55\uFE0F]")
+
+
+def _shown_text(app):
+    """Every piece of text the app shows (all tabs), except image data URIs in table cells."""
+    texts = []
+    for kind in ("title", "header", "subheader", "markdown", "caption", "success", "info", "warning",
+                 "error", "metric", "expander", "button", "download_button", "tabs"):
+        for el in app.get(kind) if kind not in ("title", "markdown", "caption") else getattr(app, kind):
+            for attr in ("value", "label"):
+                value = getattr(el, attr, None)
+                if isinstance(value, str):
+                    texts.append(value)
+    texts += [h.proto.body for h in app.get("html") if "<style>" not in h.proto.body]
+    for frame in app.dataframe:
+        for col in frame.value.columns:
+            texts.append(str(col))
+            texts += [str(v) for v in frame.value[col] if not str(v).startswith("data:image/")]
+    return texts
+
+
+def test_no_emoji_in_the_app(app):
+    app.button(key="predict").click().run()          # also the prediction result and similar wines
+    offending = [t for t in _shown_text(app) if EMOJI.search(t)]
+    assert offending == []
+
+
+def test_checks_table_shows_status_icons(app):
+    how = _tab(app, "איך זה עובד")
+    table = next(d for d in how.dataframe if "בדיקה" in d.value.columns)
+    assert all(str(v).startswith("data:image/svg+xml;base64,") for v in table.value["עבר"])
+    config = json.loads(table.proto.columns)
+    assert config["עבר"]["type_config"]["type"] == "image"
+
+
+def test_status_tile_has_its_icon_container(app):
+    tile = _keyed(app, "איך זה עובד", "kpi_status_passed")
+    assert tile is not None and _all(tile, "metric")[0].value == "עברה"
