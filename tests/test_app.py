@@ -383,15 +383,13 @@ def _cards(app, tab_label="מצא יין שווה", prefix="top_wine_"):
     return blocks
 
 
-def test_guide_has_four_arches(app):
-    guide = [h.proto.body for h in app.get("html") if "wine-guide" in h.proto.body and "<style>" not in h.proto.body]
-    assert len(guide) == 1
-    body = guide[0]
-    assert body.count('class="wine-arch"') == 4
-    for icon, title in (("icon-find", "מצא יין שווה"), ("icon-check", "בדוק יין"),
-                        ("icon-learned", "מה למדנו"), ("icon-how", "איך זה עובד")):
-        assert f"wine-arch-icon {icon}" in body and f'<div class="wine-arch-title">{title}</div>' in body
-    assert "<button" not in body and "<a " not in body                     # explanation only
+def test_tabs_carry_the_icons_and_the_guide_is_gone(app):
+    """The four tabs get the drawn icons (CSS, in tab order); the former arch guide is removed."""
+    css = next(h.proto.body for h in app.get("html") if "<style>" in h.proto.body)
+    for n in range(1, 5):
+        assert f'[data-testid="stTab"]:nth-child({n})::before {{ background-image: url("data:image/svg+xml,' in css
+    assert not any("wine-guide" in h.proto.body or "wine-arch" in h.proto.body for h in app.get("html"))
+    assert [t.label for t in app.tabs] == TABS
 
 
 def test_top3_cards_match_the_first_table_rows(app):
@@ -523,7 +521,7 @@ def test_top3_share_tile_matches_insights(app):
     data = ad.load_all(CONFIG)
     written = ad.bias_share_percent(ad.insight_sections(data["insights"])[2])
     tiles = _keyed(app, "מה למדנו", "kpis_learned")
-    share = next(m.value for m in _all(tiles, "metric") if m.label.startswith("שלוש המדינות"))
+    share = next(m.value for m in _all(tiles, "metric") if m.label == "משלוש המדינות המובילות")
     assert written is not None and share == f"{written}%"
 
 

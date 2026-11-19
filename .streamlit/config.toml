@@ -17,9 +17,9 @@ borderColor = "#E2D8C8"
 linkColor = "#6E0F1A"
 chartCategoricalColors = ["#7B2D43", "#C9A227", "#5E6B4E", "#8C6A4F", "#3E4A61"]
 
-# Body text in Rubik, headings in Frank Ruhl Libre (both from Google Fonts, both with Hebrew);
+# Body text in Heebo, headings in Frank Ruhl Libre (both from Google Fonts, both with Hebrew);
 # code (and the run id, shown as code) keeps Streamlit's default monospace codeFont.
-font = "Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap"
+font = "Heebo:https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap"
 headingFont = "Frank Ruhl Libre:https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&display=swap"
 baseFontWeight = 400
 headingFontWeights = [700, 700, 700, 500, 500, 500]   # only the loaded weights (500/700)

@@ -80,16 +80,6 @@ FOOTER = ('<footer class="wine-footer">אלי ומתנאל · פרויקט קו�
           '<a href="https://github.com/eliknzek/wine-crew" target="_blank" rel="noopener">'
           'github.com/eliknzek/wine-crew</a> · נבנה עם CrewAI ו-Streamlit</footer>')
 TITLE_HELP = "שמות ארוכים מקוצרים בטבלה. השם המלא בכרטיס היין (בחרו שורה) ובקובץ ה-CSV."
-GUIDE_ITEMS = [   # (icon class, tab, one short sentence); explanation only, not buttons
-    ("icon-find", "מצא יין שווה", "בוחרים תקציב ומקבלים את היינות שקיבלו יותר ממה שצפוי במחיר שלהם."),
-    ("icon-check", "בדוק יין", "בוחרים מקור, זן, מחיר ובציר, ורואים איזה ניקוד צפוי ליין כזה."),
-    ("icon-learned", "מה למדנו", "הממצאים מתוך ביקורות היין, עם הגרפים שמראים אותם."),
-    ("icon-how", "איך זה עובד", "הסוכנים, הבדיקות בדרך, ועד כמה המודל מדויק."),
-]
-GUIDE = '<div class="wine-guide">' + "".join(
-    f'<div class="wine-arch"><div class="wine-arch-icon {icon}" role="presentation"></div>'
-    f'<div class="wine-arch-title">{title}</div><p>{text}</p></div>'
-    for icon, title, text in GUIDE_ITEMS) + "</div>"
 # Decorative photo strips at the top of two tabs (no text on them; images in app/static/, set in
 # style.css). Only "בדוק יין" and "מה למדנו": the first tab is right under the hero, and the
 # technical tab does not need decoration.
@@ -232,7 +222,6 @@ with st.container(key="hero"):
     st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
     st.markdown(INTRO)
     st.html(DIVIDER)
-st.html(GUIDE)
 
 value_tab, predict_tab, learned_tab, how_tab = st.tabs(TABS)
 

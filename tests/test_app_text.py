@@ -351,7 +351,7 @@ def test_learned_kpis_format_and_units():
     tiles = ad.learned_kpis(_eda())
     assert [t["value"] for t in tiles] == ["111,537", "$25", "88", "74%"]   # 73.54 -> whole 74
     assert all(t["label"] for t in tiles)
-    assert "\u206680\u2060–\u2060100\u2069" in tiles[2]["label"]   # range kept LTR and unbroken in RTL text
+    assert "80" in tiles[2]["help"] and "100" in tiles[2]["help"]          # the scale is in the help
     assert ad.top_countries_share(_eda()) == 74 and ad.whole_percent(73.5) == 74 and ad.whole_percent(73.49) == 73
 
 
@@ -418,3 +418,20 @@ def test_status_icon_colors_have_3_to_1_contrast():
         assert contrast_ratio(color, "#FFFFFF") >= 3, status
         svg = (REPO_ROOT / "app" / "assets" / f"status-{status.replace('_', '-')}.svg").read_text()
         assert color in svg, status
+
+
+
+def test_tile_labels_are_short_and_have_no_parentheses():
+    """Tile labels: no parentheses (they mix directions in RTL), short enough for one or two lines
+    in a 375px tile (about 166px wide); units and scales go to the help text."""
+    eda = {"row_count": 1, "overall_median_price": 25.0, "overall_median_points": 88.0,
+           "by_country": [{"name": "US", "count": 1, "share_pct": 50.0}]}
+    summary = {"status": "passed", "seconds": 1, "total_cost_usd": 0.0, "tokens": {"requests": 1}}
+    metrics = {"selected": "v2", "models": {"v2": {"test": {"mae": 1.7, "r2": 0.5}},
+                                            "baseline": {"test": {"mae": 2.5, "r2": 0.0}}}}
+    tiles = ad.learned_kpis(eda) + ad.how_kpis(summary, metrics)
+    for tile in tiles:
+        assert "(" not in tile["label"] and ")" not in tile["label"], tile["label"]
+        assert len(tile["label"]) <= 24, tile["label"]
+    share = next(t for t in tiles if t["label"] == "משלוש המדינות המובילות")
+    assert "אחוז מכלל היינות" in share["help"]

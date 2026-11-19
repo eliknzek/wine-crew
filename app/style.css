@@ -128,24 +128,6 @@
 [data-testid="stTabs"] [data-testid="stHeading"] h3, [data-testid="stTabs"] .stMarkdown h1,
 [data-testid="stTabs"] .stMarkdown h2 { color: var(--wine-red); }
 
-/* ---- Guide: four arch frames under the hero, one per tab (explanation only, not buttons) */
-.wine-guide {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 14rem)); justify-content: center;
-  gap: 1.25rem; margin: 1.75rem 0 0.5rem; direction: rtl;
-}
-.wine-arch {
-  /* An arch: a half-circle top (radius = half the width) over straight sides. */
-  border: 1px solid var(--wine-gold); border-radius: 7rem 7rem 6px 6px;
-  background: var(--wine-card); padding: 2.4rem 1rem 1.1rem; text-align: center;
-}
-.wine-arch-icon { width: 46px; height: 46px; margin: 0 auto 0.5rem; background: center / contain no-repeat; }
-.icon-find { background-image: url("{{SVG:icon-find}}"); }
-.icon-check { background-image: url("{{SVG:icon-check}}"); }
-.icon-learned { background-image: url("{{SVG:icon-learned}}"); }
-.icon-how { background-image: url("{{SVG:icon-how}}"); }
-.wine-arch-title { font-family: var(--heading-font); font-weight: 700; font-size: 1.1rem; color: var(--wine-red); }
-.wine-arch p { margin: 0.35rem 0 0; font-size: 0.88rem; line-height: 1.45; }
-
 /* ---- Small wine cards ("3 היינות השווים ביותר", "אולי תאהבו גם") ------------------------ */
 [class*="st-key-similar_wine_"] {
   background: var(--wine-card); border-top: 2px solid var(--wine-gold) !important;
@@ -217,6 +199,18 @@
   background: var(--wine-card); border-top: 2px solid var(--wine-gold);
 }
 [class*="st-key-kpis_"] [data-testid="stMetricLabel"] p { font-size: 0.9rem; color: #4A403A; }   /* 9:1 */
+/* The label grid takes the tile's full width (it shrank to ~100px of 131px at 375px, so labels
+   broke into three lines); the text takes the room left by the help icon. */
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] {
+  width: 100% !important; grid-template-columns: minmax(0, 1fr) auto !important;
+}
+/* Streamlit's bordered metric adds its own 15px inside the tile, on top of --card-pad: remove
+   it, so the tile has one padding (and the label gets the room it needs at 375px). */
+[class*="st-key-kpis_"] [data-testid="stMetric"] > div { padding-left: 0 !important; padding-right: 0 !important; }
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] > div,
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"] {
+  width: 100% !important; max-width: 100% !important;
+}
 /* Labels and the delta line wrap instead of being cut with "…" (Streamlit keeps them on one line). */
 [class*="st-key-kpis_"] [data-testid="stMetricDelta"], [class*="st-key-kpis_"] [data-testid="stMetricDelta"] *,
 [class*="st-key-kpis_"] [data-testid="stMetricLabel"], [class*="st-key-kpis_"] [data-testid="stMetricLabel"] * {
@@ -259,11 +253,11 @@
 /* ---- One inner padding for all white cards and containers -------------------------------- */
 [class*="st-key-chart_"], [class*="st-key-card_"], [class*="st-key-top_wine_"],
 [class*="st-key-similar_wine_"], .st-key-wine_card, [class*="st-key-kpis_"] [data-testid="stMetric"],
-.no-results, .wine-arch { padding: var(--card-pad) !important; }
+.no-results { padding: var(--card-pad) !important; }
 /* Chart toolbar (fullscreen / download) on the chart's left corner, not over the card title. */
 [data-testid="stElementToolbar"] { right: auto !important; left: 0 !important; }
 
-/* ---- Tabs with line icons (the same icons as the guide) ---------------------------------- */
+/* ---- Tabs with line icons (they replace the former arch guide) ------------------------- */
 [data-testid="stTabs"] [role="tablist"] { gap: 0.25rem; }
 [data-testid="stTabs"] [data-testid="stTab"] {
   display: flex; align-items: center; height: auto; padding: 0.8rem 1.25rem; gap: 0.55rem;
@@ -331,8 +325,6 @@
     flex: 1 1 0; min-width: 0; flex-direction: column; padding: 0.55rem 0.2rem; gap: 0.25rem;
   }
   [data-testid="stTabs"] [data-testid="stTab"] p { font-size: 0.8rem; white-space: normal; text-align: center; line-height: 1.2; }
-  .wine-guide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
-  .wine-arch { border-radius: 5rem 5rem 6px 6px; padding: 1.8rem 0.6rem 0.9rem; }
   .wine-props { grid-template-columns: 1fr; }
   /* Cards stacked one per row: natural height, no stretching. */
   .st-key-top3 [data-testid="stColumn"] > [data-testid="stVerticalBlock"],

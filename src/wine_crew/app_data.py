@@ -735,18 +735,18 @@ def top_countries_share(eda: dict[str, Any], n: int = 3) -> int:
 
 
 def learned_kpis(eda: dict[str, Any]) -> list[dict[str, str]]:
-    """The four KPI tiles of 'מה למדנו', every number from eda_summary.json."""
+    """The four KPI tiles of 'מה למדנו', every number from eda_summary.json. Labels are short
+    (one or two lines at 375px) and have no parentheses that would mix directions; the unit or
+    scale is in the help text."""
     return [
-        {"label": "יינות בנתונים (אחרי ניקוי)", "value": f"{int(eda['row_count']):,}",
-         "help": "מספר היינות שנשארו אחרי הסרת כפילויות ושורות בלי מחיר, מדינה או זן."},
+        {"label": "יינות אחרי ניקוי", "value": f"{int(eda['row_count']):,}",
+         "help": "מספר היינות שנשארו בנתונים אחרי הסרת כפילויות ושורות בלי מחיר, מדינה או זן."},
         {"label": "מחיר חציוני לבקבוק", "value": money(eda["overall_median_price"]),
-         "help": GLOSSARY["חציון"]},
-        # The range is isolated as one left-to-right unit (in RTL text the dash would flip it to
-        # "100–80"), with word joiners so it never breaks across lines.
-        {"label": "ניקוד חציוני (\u206680\u2060–\u2060100\u2069)", "value": f"{float(eda['overall_median_points']):g}",
-         "help": GLOSSARY["חציון"]},
-        {"label": "שלוש המדינות המובילות (% מהיינות)", "value": f"{top_countries_share(eda)}%",
-         "help": "חלק היינות שמגיעים משלוש המדינות עם הכי הרבה יינות בנתונים."},
+         "help": f"בדולרים. {GLOSSARY['חציון']}"},
+        {"label": "ניקוד חציוני", "value": f"{float(eda['overall_median_points']):g}",
+         "help": f"בסולם של WineEnthusiast, מ-80 עד 100. {GLOSSARY['חציון']}"},
+        {"label": "משלוש המדינות המובילות", "value": f"{top_countries_share(eda)}%",
+         "help": "אחוז מכלל היינות בנתונים שמגיעים משלוש המדינות עם הכי הרבה יינות."},
     ]
 
 
@@ -765,10 +765,12 @@ def how_kpis(summary: dict[str, Any], metrics: dict[str, Any] | None) -> list[di
         baseline = metrics["models"]["baseline"]["test"]
         diff = round(selected["mae"] - baseline["mae"], 2)
         tiles += [
-            {"label": "MAE של המודל (נקודות)", "value": f"{selected['mae']:.2f}",   # delta: vs the baseline guess
-             "delta": f"{diff:+.2f} מהבסיס", "delta_color": "inverse", "help": GLOSSARY["MAE"]},
-            {"label": "R² (test)", "value": f"{round_for_display(selected['r2']):.2f}",
-             "help": "כמה מהשונות בניקוד המודל מסביר: 0 כמו ניחוש הבסיס, 1 מושלם."},
+            # delta: compared with the baseline guess; the unit (score points) is in the help
+            {"label": "שגיאת המודל", "value": f"{selected['mae']:.2f}",
+             "delta": f"{diff:+.2f} מהבסיס", "delta_color": "inverse",
+             "help": f"MAE בנקודות ניקוד, בקבוצת הבדיקה. {GLOSSARY['MAE']}"},
+            {"label": "מקדם R²", "value": f"{round_for_display(selected['r2']):.2f}",
+             "help": "בקבוצת הבדיקה: כמה מהשונות בניקוד המודל מסביר. 0 כמו ניחוש הבסיס, 1 מושלם."},
         ]
     return tiles
 

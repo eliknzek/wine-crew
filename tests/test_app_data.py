@@ -180,7 +180,7 @@ def test_theme_fonts():
     from wine_crew.config import REPO_ROOT
 
     theme = tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())["theme"]
-    assert theme["font"].startswith("Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700")
+    assert theme["font"].startswith("Heebo:https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700")
     assert theme["headingFont"].startswith(
         "Frank Ruhl Libre:https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700")
     assert "codeFont" not in theme                   # code and the run id stay monospace
@@ -264,8 +264,8 @@ def test_dashboard_data_from_the_artifacts(data, ranking):
     assert ad.INSIGHT_HEADINGS == INSIGHT_HEADINGS
     assert ad.points_histogram(ranking)["count"].sum() == eda["row_count"] == len(ranking)
     tiles = {t["label"]: t["value"] for t in ad.learned_kpis(eda)}
-    assert tiles["יינות בנתונים (אחרי ניקוי)"] == f"{eda['row_count']:,}"
+    assert tiles["יינות אחרי ניקוי"] == f"{eda['row_count']:,}"
     top3 = sorted(eda["by_country"], key=lambda r: r["count"], reverse=True)[:3]
-    assert tiles["שלוש המדינות המובילות (% מהיינות)"] == f"{round(sum(r['share_pct'] for r in top3))}%"
+    assert tiles["משלוש המדינות המובילות"] == f"{round(sum(r['share_pct'] for r in top3))}%"
     assert len(ad.price_band_data(eda)) == len(eda["price_bands"]["bands"])
     assert len(ad.vintage_data(eda)) == len(eda["by_vintage"])
