@@ -11,15 +11,18 @@ import pandas as pd
 import pytest
 
 from wine_crew.checks import FlowCheckError, check_features, expected_feature_columns
-from wine_crew.flow import crew_cost, run_flow
+from wine_crew.flow import run_flow, token_cost
 from wine_crew.tools.crewai_tools import VALUE_RANKING_COLUMNS
 from wine_crew.tools.contract_tools import build_contract, save_contract
 from wine_crew.tools.data_tools import clean_data, load_contract_template, load_raw, read_clean_csv
 from wine_crew.tools.model_report import evaluation_report_md, metrics_document
 from wine_crew.tools.model_tools import build_features, rank_value_wines, save_model, train_models
 
+# What CrewAI's crew.token_usage reports (only cross-checked) ...
 FAKE_USAGE = {"total_tokens": 1500, "prompt_tokens": 1000, "cached_prompt_tokens": 400,
               "completion_tokens": 500, "successful_requests": 3}
+# ... and what RequestCounter counts from OpenAI's per-call usage (used for the cost).
+FAKE_COUNTS = {"requests": 3, "input_tokens": 1000, "cached_input_tokens": 400, "output_tokens": 500}
 
 
 @pytest.fixture
@@ -58,7 +61,7 @@ def stub_analyst(corrupt=None):
         save_contract(build_contract(clean, sha, config), out["contract"])
         if corrupt:
             corrupt(config)
-        return {"seconds": 1.0, "token_usage": FAKE_USAGE}
+        return {"seconds": 1.0, "token_usage": FAKE_USAGE, "usage": FAKE_COUNTS}
     return run
 
 
@@ -84,7 +87,7 @@ def stub_scientist(corrupt=None, calls=None):
             f"{sci}/value_ranking.csv", index=False)
         if corrupt:
             corrupt(config)
-        return {"seconds": 2.0, "token_usage": FAKE_USAGE}
+        return {"seconds": 2.0, "token_usage": FAKE_USAGE, "usage": FAKE_COUNTS}
     return run
 
 
@@ -139,8 +142,10 @@ def test_passing_run(flow_config, capsys):
     assert s["rows"]["raw"] == 600 and s["rows"]["clean"] == s["rows"]["features"] > 0
     assert s["rows"]["train"] + s["rows"]["test"] == s["rows"]["clean"]
     assert len(s["raw_sha256"]) == 64 and s["selected"] in ("v1", "v2")
-    assert s["crews"]["crew1"]["cost_usd"] == crew_cost(FAKE_USAGE, flow_config)
-    assert s["total_cost_usd"] == pytest.approx(2 * crew_cost(FAKE_USAGE, flow_config))
+    assert s["crews"]["crew1"]["cost_usd"] == token_cost(FAKE_COUNTS, flow_config)
+    assert s["total_cost_usd"] == pytest.approx(2 * token_cost(FAKE_COUNTS, flow_config))
+    assert s["tokens"] == {"requests": 6, "input_tokens": 2000, "cached_input_tokens": 800, "output_tokens": 1000}
+    assert {k: s["crews"]["crew1"][k] for k in FAKE_COUNTS} == FAKE_COUNTS
     log = _log_text(flow_config)
     assert s["run_id"] in log
     for step in ("preflight", "crew1", "gate_contract", "crew2", "gate_features", "gate_model"):
@@ -148,16 +153,33 @@ def test_passing_run(flow_config, capsys):
     for check in ("preflight", "contract", "features", "model"):
         assert f"check {check}: PASSED" in log
     assert "crew1 rows: in=600 out=" in log and "crew2 rows: in=" in log and "train rows: train=" in log
-    assert "crew1 tokens: total=1500" in log and "crew2 tokens:" in log and "cost=$" in log
+    assert "crew1 usage: requests=3 input=1000 cached_input=400 output=500 cost=$" in log
+    assert "crew2 usage:" in log and "WARNING" not in log
     assert s["raw_sha256"] in log
     assert s["artifacts"]["value_ranking"].endswith("value_ranking.csv")
     assert re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ INFO \[" + re.escape(s["run_id"]) + "]", log)
 
 
-def test_crew_cost():
+def test_token_cost():
     cfg = {"llm": {"price_per_million": {"input": 0.15, "cached_input": 0.075, "output": 0.60}}}
-    assert crew_cost(FAKE_USAGE, cfg) == pytest.approx((600 * 0.15 + 400 * 0.075 + 500 * 0.60) / 1e6)
-    assert crew_cost(None, cfg) == 0.0
+    # 600 uncached input, 400 cached input, 500 output
+    assert token_cost(FAKE_COUNTS, cfg) == pytest.approx((600 * 0.15 + 400 * 0.075 + 500 * 0.60) / 1e6)
+    assert token_cost(None, cfg) == 0.0
+    # The real run of PR #11 as OpenAI billed it: 19,471 input (4,352 cached), 2,586 output.
+    billed = {"input_tokens": 19471, "cached_input_tokens": 4352, "output_tokens": 2586}
+    assert token_cost(billed, cfg) == pytest.approx(0.004146, abs=1e-6)
+
+
+def test_request_count_mismatch_is_a_warning_not_a_failure(flow_config):
+    analyst = stub_analyst()
+
+    def inflated(config):
+        return {**analyst(config), "token_usage": {**FAKE_USAGE, "successful_requests": 12}}
+
+    assert run_flow(flow_config, inflated, stub_scientist()) == 0
+    log = _log_text(flow_config)
+    assert "WARNING" in log and "crew1: CrewAI reports 12 requests but 3 were counted" in log
+    assert _summary(flow_config)["crews"]["crew1"]["requests"] == 3
 
 
 # --------------------------------------------------------------------------- preflight

@@ -56,17 +56,19 @@ def utc_stamp(moment: datetime | None = None) -> str:
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def crew_cost(token_usage: dict[str, Any] | None, config: dict[str, Any]) -> float:
-    """USD cost of one crew from its token usage and llm.price_per_million in config."""
-    if not token_usage:
+def token_cost(usage: dict[str, Any] | None, config: dict[str, Any]) -> float:
+    """USD cost from counted tokens (input includes cached input) and llm.price_per_million."""
+    if not usage:
         return 0.0
     price = config["llm"]["price_per_million"]
-    prompt = token_usage.get("prompt_tokens", 0)
-    cached = token_usage.get("cached_prompt_tokens", 0)
-    completion = token_usage.get("completion_tokens", 0)
-    cost = ((prompt - cached) * price["input"] + cached * price["cached_input"]
-            + completion * price["output"]) / 1_000_000
+    inp = usage.get("input_tokens", 0)
+    cached = usage.get("cached_input_tokens", 0)
+    out = usage.get("output_tokens", 0)
+    cost = ((inp - cached) * price["input"] + cached * price["cached_input"] + out * price["output"]) / 1_000_000
     return round(cost, 6)
+
+
+TOKEN_KEYS = ("requests", "input_tokens", "cached_input_tokens", "output_tokens")
 
 
 class RunLog:
@@ -93,6 +95,10 @@ class RunLog:
 
     def error(self, message: str) -> None:
         self.logger.error(message)
+
+    def warning(self, message: str) -> None:
+        self.logger.warning(message)
+        print(f"[{self.run_id}] WARNING {message}", flush=True)
 
     @contextmanager
     def step(self, name: str):
@@ -270,9 +276,19 @@ class WineFlow(Flow[WineState]):
 
     def _crew(self, name: str, fn: CrewFn) -> None:
         result = fn(self._config) or {}
-        usage = result.get("token_usage") or {}
-        cost = crew_cost(usage, self._config)
-        self.state.crews[name] = {"seconds": result.get("seconds"), "tokens": usage, "cost_usd": cost}
+        usage = {k: int((result.get("usage") or {}).get(k, 0)) for k in TOKEN_KEYS}
+        cost = token_cost(usage, self._config)
+        crewai_usage = result.get("token_usage") or {}
+        self.state.crews[name] = {"seconds": result.get("seconds"), **usage, "cost_usd": cost,
+                                  "crewai_reported": crewai_usage}
+        self._log.info(
+            f"{name} usage: requests={usage['requests']} input={usage['input_tokens']} "
+            f"cached_input={usage['cached_input_tokens']} output={usage['output_tokens']} cost=${cost:.4f}")
+        # Cross-check against CrewAI's own count; a mismatch is logged, never fatal.
+        reported = crewai_usage.get("successful_requests")
+        if reported is not None and reported != usage["requests"]:
+            self._log.warning(f"{name}: CrewAI reports {reported} requests but {usage['requests']} were "
+                              "counted from OpenAI's per-call usage; the counted numbers are used")
         by_task = result.get("requests_by_task")
         if by_task:
             self.state.crews[name]["requests_by_task"] = by_task
@@ -280,10 +296,6 @@ class WineFlow(Flow[WineState]):
                                                   if v.get("guardrail_retries") else "")
                      for task, v in by_task.items()]
             self._log.info(f"{name} requests by task: " + " ".join(parts))
-        self._log.info(
-            f"{name} tokens: total={usage.get('total_tokens', 0)} prompt={usage.get('prompt_tokens', 0)} "
-            f"cached={usage.get('cached_prompt_tokens', 0)} completion={usage.get('completion_tokens', 0)} "
-            f"requests={usage.get('successful_requests', 0)} cost=${cost:.4f}")
 
     def _rows(self, path: Path) -> int:
         return int(len(pd.read_csv(path, usecols=[0])))
@@ -365,6 +377,7 @@ def _summary(state: WineState, status: str, started: datetime, seconds: float, l
         "selected": state.selected,
         "test_mae": state.test_mae,
         "crews": state.crews,
+        "tokens": {k: sum(int(c.get(k, 0)) for c in state.crews.values()) for k in TOKEN_KEYS},
         "total_cost_usd": round(sum(c.get("cost_usd", 0) for c in state.crews.values()), 6),
         "log": _rel(log_path),
         "artifacts": {k: _rel(v) for k, v in paths.items()},

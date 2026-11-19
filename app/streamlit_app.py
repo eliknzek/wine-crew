@@ -119,7 +119,10 @@ with overview:
         c1, c2, c3 = st.columns(3)
         c1.metric("תאריך (UTC)", summary["started_at"][:16].replace("T", " "))
         c2.metric("משך", f"{summary['seconds']:.0f} שניות")
-        c3.metric("עלות LLM", f"${summary['total_cost_usd']:.3f}")
+        c3.metric("עלות LLM", f"${summary['total_cost_usd']:.4f}")
+        tokens = summary.get("tokens")
+        if tokens:   # counted from OpenAI's per-call usage (runs before this field: not shown)
+            st.caption(ad.tokens_text(tokens))
 
         st.subheader("בדיקות")
         checks = pd.DataFrame([

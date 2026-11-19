@@ -66,20 +66,31 @@ from crewai.events.types.llm_events import LLMCallCompletedEvent  # noqa: E402
 AGENT_MAX_ITER = 6
 
 
-class RequestCounter:
-    """Count completed LLM calls per task while a crew runs (context manager).
+TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens")
 
-    Uses CrewAI's event bus; handlers run in a thread pool, so the bus is flushed on
-    exit before the handler is removed.
+
+class RequestCounter:
+    """Count LLM requests and tokens per task while a crew runs (context manager).
+
+    Reads OpenAI's own usage from every LLMCallCompletedEvent (prompt, cached prompt and
+    completion tokens), so these are the numbers to report, not CrewAI's crew.token_usage
+    (which adds a shared LLM's totals once per agent). Handlers run in a thread pool, so
+    the bus is flushed on exit before the handler is removed.
     """
 
     def __init__(self) -> None:
-        self.counts: Counter[str] = Counter()
+        self.tasks: dict[str, dict[str, int]] = {}
         self._lock = threading.Lock()
 
     def _handler(self, source, event) -> None:  # (source, LLMCallCompletedEvent)
+        usage = event.usage or {}
         with self._lock:
-            self.counts[event.task_name or "unknown"] += 1
+            row = self.tasks.setdefault(event.task_name or "unknown",
+                                        {"requests": 0, **{f: 0 for f in TOKEN_FIELDS}})
+            row["requests"] += 1
+            row["input_tokens"] += int(usage.get("prompt_tokens") or 0)
+            row["cached_input_tokens"] += int(usage.get("cached_prompt_tokens") or 0)
+            row["output_tokens"] += int(usage.get("completion_tokens") or 0)
 
     def __enter__(self) -> "RequestCounter":
         crewai_event_bus.register_handler(LLMCallCompletedEvent, self._handler)
@@ -89,15 +100,23 @@ class RequestCounter:
         crewai_event_bus.flush()
         crewai_event_bus.off(LLMCallCompletedEvent, self._handler)
 
+    def totals(self) -> dict[str, int]:
+        """Requests and tokens summed over every task."""
+        keys = ("requests", *TOKEN_FIELDS)
+        return {k: sum(row[k] for row in self.tasks.values()) for k in keys}
+
     def by_task(self, tasks) -> dict[str, dict[str, int]]:
-        """{task name: {"requests": n, "guardrail_retries": r}} for the crew's tasks, in order."""
+        """{task name: requests, tokens and guardrail_retries} for the crew's tasks, in order."""
+        empty = {"requests": 0, **{f: 0 for f in TOKEN_FIELDS}}
         out = {}
+        known = set()
         for i, task in enumerate(tasks):
-            name = task.name or f"task_{i}"
-            out[name] = {"requests": self.counts.get(task.name or task.description, 0),
-                         "guardrail_retries": int(getattr(task, "retry_count", 0) or 0)}
-        other = sum(n for key, n in self.counts.items()
-                    if key not in {t.name or t.description for t in tasks})
+            key = task.name or task.description
+            known.add(key)
+            out[task.name or f"task_{i}"] = {**self.tasks.get(key, empty),
+                                             "guardrail_retries": int(getattr(task, "retry_count", 0) or 0)}
+        other = [row for key, row in self.tasks.items() if key not in known]
         if other:
-            out["other"] = {"requests": other, "guardrail_retries": 0}
+            out["other"] = {k: sum(r[k] for r in other) for k in ("requests", *TOKEN_FIELDS)}
+            out["other"]["guardrail_retries"] = 0
         return out

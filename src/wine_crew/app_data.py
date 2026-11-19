@@ -332,3 +332,10 @@ def localize_countries(text: str) -> str:
         pattern = re.compile(rf"(?<![A-Za-z(]){re.escape(name)}(?![A-Za-z)])")
         text = pattern.sub(lambda m: country_label(m.group(0)), text)
     return text
+
+
+def tokens_text(tokens: dict[str, int]) -> str:
+    """One Hebrew line for the run's counted LLM usage."""
+    return (f"{tokens.get('requests', 0):,} בקשות · טוקני קלט: {tokens.get('input_tokens', 0):,} "
+            f"(מהם {tokens.get('cached_input_tokens', 0):,} מהמטמון) · "
+            f"טוקני פלט: {tokens.get('output_tokens', 0):,}")

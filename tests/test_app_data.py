@@ -223,3 +223,8 @@ def test_file_fingerprint_changes_when_an_artifact_changes(tmp_path):
 
 def test_data_files_are_what_load_all_reads():
     assert set(ad.data_files(CONFIG)) == set(ad.load_all(CONFIG))
+
+
+def test_tokens_text():
+    text = ad.tokens_text({"requests": 11, "input_tokens": 15325, "cached_input_tokens": 2688, "output_tokens": 2225})
+    assert text == "11 בקשות · טוקני קלט: 15,325 (מהם 2,688 מהמטמון) · טוקני פלט: 2,225"
