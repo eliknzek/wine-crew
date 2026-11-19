@@ -49,17 +49,47 @@ def read_text(path: Path) -> str | None:
         return None
 
 
+def data_files(config: dict[str, Any]) -> dict[str, Path]:
+    """The small artifacts load_all reads."""
+    sci = resolve_path(config, "artifacts_scientist")
+    return {
+        "summary": artifact_path(config, "run_summary"),
+        "metrics": sci / "metrics.json",
+        "contract": artifact_path(config, "contract"),
+        "insights": artifact_path(config, "insights"),
+        "model_card": sci / "model_card.md",
+        "evaluation_report": sci / "evaluation_report.md",
+    }
+
+
+def model_file(config: dict[str, Any]) -> Path:
+    return resolve_path(config, "artifacts_scientist") / "model.pkl"
+
+
+def file_fingerprint(paths) -> tuple:
+    """(path, mtime_ns, size) per file, None for a missing one. A cache key that changes
+    whenever an artifact is replaced (git rewrites changed files on pull)."""
+    items = []
+    for path in sorted(str(p) for p in paths):
+        try:
+            stat = Path(path).stat()
+            items.append((path, stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            items.append((path, None, None))
+    return tuple(items)
+
+
 def load_all(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """Small artifacts the app shows; a missing file is None."""
     config = config if config is not None else load_config()
-    sci = resolve_path(config, "artifacts_scientist")
+    files = data_files(config)
     return {
-        "summary": read_json(artifact_path(config, "run_summary")),
-        "metrics": read_json(sci / "metrics.json"),
-        "contract": read_json(artifact_path(config, "contract")),
-        "insights": read_text(artifact_path(config, "insights")),
-        "model_card": read_text(sci / "model_card.md"),
-        "evaluation_report": read_text(sci / "evaluation_report.md"),
+        "summary": read_json(files["summary"]),
+        "metrics": read_json(files["metrics"]),
+        "contract": read_json(files["contract"]),
+        "insights": read_text(files["insights"]),
+        "model_card": read_text(files["model_card"]),
+        "evaluation_report": read_text(files["evaluation_report"]),
     }
 
 
@@ -69,7 +99,7 @@ def chart_paths(config: dict[str, Any]) -> dict[str, Path]:
 
 
 def load_model(config: dict[str, Any]):
-    path = resolve_path(config, "artifacts_scientist") / "model.pkl"
+    path = model_file(config)
     return joblib.load(path) if path.exists() else None
 
 

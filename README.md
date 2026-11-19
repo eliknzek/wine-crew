@@ -58,6 +58,7 @@ streamlit run app/streamlit_app.py
 - **חבילת `wine_crew`:** לא מותקנת. האפליקציה מוסיפה את `src/` ל-`sys.path` בעצמה.
 - **סודות:** אין צורך בסודות.
 - **עיצוב:** הפונט (Rubik) מוגדר ב-`.streamlit/config.toml`.
+- **אחרי merge:** האפליקציה טוענת מחדש בעצמה את הקוד ב-`src/wine_crew` (דרך `app/code_reload.py`) ואת התוצרים. המטמון שלהם תלוי בזמן השינוי ובגודל של הקבצים. אם בכל זאת מוצגת שגיאה או גרסה ישנה, עושים Reboot app ב-Streamlit Cloud.
 
 קישור לאפליקציה: https://wine-crew.streamlit.app/
 

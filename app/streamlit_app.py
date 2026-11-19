@@ -12,12 +12,25 @@ from pathlib import Path
 
 # Make wine_crew importable without installing the package (also needed to
 # unpickle model.pkl, whose pipeline uses wine_crew.tools.model_tools).
-SRC = Path(__file__).resolve().parents[1] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+APP_DIR = Path(__file__).resolve().parent
+SRC = APP_DIR.parent / "src"
+for folder in (SRC, APP_DIR):
+    if str(folder) not in sys.path:
+        sys.path.insert(0, str(folder))
 
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
+
+from code_reload import reload_if_changed  # noqa: E402
+
+
+def _clear_caches() -> None:
+    st.cache_data.clear()
+    st.cache_resource.clear()
+
+
+# After an update, load the new src/wine_crew code (Streamlit does not reload it itself).
+reload_if_changed(SRC / "wine_crew", clear_caches=_clear_caches)
 
 from wine_crew import app_data as ad  # noqa: E402
 from wine_crew.config import load_config, resolve_path  # noqa: E402
@@ -47,18 +60,21 @@ CHECK_NAMES = {"preflight": "בדיקה מקדימה (קובץ גולמי)", "co
                "features": "שער 2 (features)", "model": "שער 3 (מודל)"}
 
 
-@st.cache_data
-def _data():
+# Each loader takes the fingerprint (mtime, size) of the files it reads as its cache key,
+# so a new artifact (for example after a git pull) is loaded on the next rerun. The
+# argument must not start with "_": Streamlit leaves such arguments out of the key.
+@st.cache_data(max_entries=2)
+def _data(fingerprint: tuple):  # noqa: ARG001 - cache key only
     return ad.load_all(load_config())
 
 
-@st.cache_resource
-def _model():
+@st.cache_resource(max_entries=2)
+def _model(fingerprint: tuple):  # noqa: ARG001 - cache key only
     return ad.load_model(load_config())
 
 
-@st.cache_data
-def _ranking():
+@st.cache_data(max_entries=2)
+def _ranking(fingerprint: tuple):  # noqa: ARG001 - cache key only
     return ad.load_ranking(load_config())
 
 
@@ -82,7 +98,7 @@ def _missing(name: str) -> None:
 
 
 config = load_config()
-data = _data()
+data = _data(ad.file_fingerprint(ad.data_files(config).values()))
 
 st.title("🍷 ניקוד יינות ויינות ששווים את מחירם")
 st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
@@ -180,7 +196,7 @@ with model_tab:
 
 # --------------------------------------------------------------------------- value wines
 with value_tab:
-    ranking = _ranking()
+    ranking = _ranking(ad.file_fingerprint([resolve_path(config, "value_ranking")]))
     if ranking is None:
         _missing("artifacts/scientist/value_ranking.csv")
     else:
@@ -218,7 +234,7 @@ with value_tab:
 
 # --------------------------------------------------------------------------- prediction
 with predict_tab:
-    model = _model()
+    model = _model(ad.file_fingerprint([ad.model_file(config)]))
     metrics = data["metrics"]
     if model is None or metrics is None:
         _missing("artifacts/scientist/model.pkl")
@@ -226,7 +242,7 @@ with predict_tab:
         st.markdown("הניקוד הצפוי של יין לפי מחיר, מקור, זן ובציר. האפשרויות הן הקטגוריות שהמודל "
                     "מכיר; קטגוריות נדירות מטופלות כ-\"Other\".")
         opts = ad.model_options(model)
-        ranking = _ranking()
+        ranking = _ranking(ad.file_fingerprint([resolve_path(config, "value_ranking")]))
         provinces = ad.options_by_parent(ranking, opts, "country", "province")
         regions = ad.options_by_parent(ranking, opts, "province", "region_1")
         lo, hi = ad.price_range(data["contract"])

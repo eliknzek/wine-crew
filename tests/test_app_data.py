@@ -204,3 +204,22 @@ def test_localize_countries_keeps_every_number(data):
     numbers = _re.findall(r"\d[\d,.]*", text)
     assert _re.findall(r"\d[\d,.]*", ad.localize_countries(text)) == numbers
     assert ad.localize_countries(ad.localize_countries(text)) == ad.localize_countries(text)
+
+
+def test_file_fingerprint_changes_when_an_artifact_changes(tmp_path):
+    import os
+    import time
+
+    a, missing = tmp_path / "a.json", tmp_path / "missing.json"
+    a.write_text("{}")
+    first = ad.file_fingerprint([a, missing])
+    assert first == ad.file_fingerprint([missing, a])            # order does not matter
+    assert (str(missing), None, None) in first
+    a.write_text('{"x": 1}')
+    later = time.time_ns() + 5_000_000_000
+    os.utime(a, ns=(later, later))
+    assert ad.file_fingerprint([a, missing]) != first
+
+
+def test_data_files_are_what_load_all_reads():
+    assert set(ad.data_files(CONFIG)) == set(ad.load_all(CONFIG))

@@ -34,7 +34,7 @@ To change dependencies, edit `requirements.in` and re-lock with `uv pip compile 
 
 - Thresholds, paths and hyperparameters live in `config.yaml`. Read them from there rather than hard-coding them.
 - Gates in `checks.py` are pure Python and independent of the LLM. A failure raises `FlowCheckError`, and the Flow stops cleanly: it logs the check, marks `artifacts/run_summary.json` as failed, and exits with code 1.
-- The Streamlit app only reads `artifacts/` and `model.pkl`. It never runs the Flow and needs no API key. It must not import crewai or matplotlib (keep `app_data.py` light), and it adds `src/` to `sys.path` itself so it runs without installing the package. Form options come from the model's learned categories (`group_rare.keep_`), and the value screen reads `artifacts/scientist/value_ranking.csv`.
+- The Streamlit app only reads `artifacts/` and `model.pkl`. It never runs the Flow and needs no API key. It must not import crewai or matplotlib (keep `app_data.py` light), and it adds `src/` to `sys.path` itself so it runs without installing the package. Form options come from the model's learned categories (`group_rare.keep_`), and the value screen reads `artifacts/scientist/value_ranking.csv`. Streamlit reloads only modules under `app/`, so `app/code_reload.py` evicts `wine_crew.*` when `src/wine_crew` changes; cached loaders take a file fingerprint (mtime, size) as their key, never an argument starting with `_` (Streamlit does not hash those).
 
 ## Dataset contract (docs/dataset_contract.json)
 
