@@ -5,7 +5,7 @@
 
 ## נתונים
 - מקור: ביקורות WineEnthusiast מ-Kaggle (zynicide/wine-reviews), שנאספו ב-2017.
-- 111537 יינות אחרי ניקוי: 89229 לאימון ו-22308 לבדיקה (חלוקה 80/20, seed 42).
+- 111,537 יינות אחרי ניקוי: 89,229 לאימון ו-22,308 לבדיקה (חלוקה 80/20, seed 42).
 - הערכה: 5-fold CV על קבוצת האימון, והמודל נבחר לפי MAE ממוצע ב-CV.
 - features של v1: price, vintage, country, province, variety. features של v2: price, vintage, country, province, variety, region_1.
 

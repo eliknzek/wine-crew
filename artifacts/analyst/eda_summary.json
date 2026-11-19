@@ -648,6 +648,11 @@
     "top_country": "US",
     "top_country_share_pct": 45.04,
     "top3_share_pct": 73.55,
+    "top3_countries": [
+      "US",
+      "France",
+      "Italy"
+    ],
     "shares_pct": {
       "US": 45.04,
       "France": 14.6,
