@@ -137,3 +137,7 @@ def test_title_is_hebrew_and_page_title_stays(app):
     source = open(APP, encoding="utf-8").read()
     assert 'page_title="wine-crew"' in source
     assert '[data-testid="stHeading"]' in source and '[data-testid="stCaptionContainer"]' in source
+
+
+def test_analysis_tab_shows_hebrew_country_names(app):
+    assert any("אוסטריה (Austria)" in m.value for m in app.markdown)

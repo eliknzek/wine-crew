@@ -183,3 +183,24 @@ def test_theme_uses_rubik():
     for key in ("font", "headingFont"):
         assert theme[key].startswith("Rubik:https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700")
     assert "codeFont" not in theme                   # code and the run id stay monospace
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("- **Austria**: ניקוד חציוני 90, מחיר חציוני $25", "- **אוסטריה (Austria)**: ניקוד חציוני 90, מחיר חציוני $25"),
+    ("45% מ-US", "45% מ-ארצות הברית (US)"),
+    ("prices in USD", "prices in USD"),
+    ("South Africa ו-Israel", "דרום אפריקה (South Africa) ו-ישראל (Israel)"),
+    ("ישראל (Israel) כבר מתורגם", "ישראל (Israel) כבר מתורגם"),
+    ("Riesling ו-Portuguese Red", "Riesling ו-Portuguese Red"),
+])
+def test_localize_countries(text, expected):
+    assert ad.localize_countries(text) == expected
+
+
+def test_localize_countries_keeps_every_number(data):
+    import re as _re
+
+    text = data["insights"]
+    numbers = _re.findall(r"\d[\d,.]*", text)
+    assert _re.findall(r"\d[\d,.]*", ad.localize_countries(text)) == numbers
+    assert ad.localize_countries(ad.localize_countries(text)) == ad.localize_countries(text)
