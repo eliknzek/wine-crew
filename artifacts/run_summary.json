@@ -1,9 +1,9 @@
 {
-  "run_id": "20261118-093009-b17c94",
+  "run_id": "20261119-103451-e16b16",
   "status": "passed",
-  "started_at": "2026-11-18T09:30:09+00:00",
-  "finished_at": "2026-11-18T09:31:28+00:00",
-  "seconds": 78.2,
+  "started_at": "2026-11-19T10:34:51+00:00",
+  "finished_at": "2026-11-19T10:36:01+00:00",
+  "seconds": 69.3,
   "raw_sha256": "52af2643c8ac29f010f0cc629dfbdda1c74aa0f332d11762af9ef3de4e567ac9",
   "rows": {
     "raw": 129971,
@@ -27,7 +27,7 @@
     },
     "model": {
       "passed": true,
-      "message": "ok {\"selected\": \"v2\", \"mae\": 1.6895, \"baseline_mae\": 2.538, \"sample_predictions\": [88.02, 87.54, 86.15, 91.39, 86.26]}"
+      "message": "ok {\"selected\": \"v2\", \"mae\": 1.6895, \"baseline_mae\": 2.538, \"sample_predictions\": [88.02, 87.54, 86.15, 91.39, 86.26], \"ranked_wines\": 111537}"
     }
   },
   "selected": "v2",
@@ -38,34 +38,34 @@
   },
   "crews": {
     "crew1": {
-      "seconds": 36.9,
+      "seconds": 33.2,
       "tokens": {
-        "total_tokens": 63384,
-        "prompt_tokens": 57408,
-        "cached_prompt_tokens": 16896,
-        "completion_tokens": 5976,
-        "reasoning_tokens": 0,
-        "cache_creation_tokens": 0,
-        "successful_requests": 36
-      },
-      "cost_usd": 0.01093
-    },
-    "crew2": {
-      "seconds": 40.8,
-      "tokens": {
-        "total_tokens": 28628,
-        "prompt_tokens": 24356,
-        "cached_prompt_tokens": 5632,
-        "completion_tokens": 4272,
+        "total_tokens": 59000,
+        "prompt_tokens": 53060,
+        "cached_prompt_tokens": 11776,
+        "completion_tokens": 5940,
         "reasoning_tokens": 0,
         "cache_creation_tokens": 0,
         "successful_requests": 32
       },
-      "cost_usd": 0.005794
+      "cost_usd": 0.01064
+    },
+    "crew2": {
+      "seconds": 35.7,
+      "tokens": {
+        "total_tokens": 29228,
+        "prompt_tokens": 24824,
+        "cached_prompt_tokens": 5632,
+        "completion_tokens": 4404,
+        "reasoning_tokens": 0,
+        "cache_creation_tokens": 0,
+        "successful_requests": 32
+      },
+      "cost_usd": 0.005944
     }
   },
-  "total_cost_usd": 0.016724,
-  "log": "logs/run_20261118-093009.log",
+  "total_cost_usd": 0.016584,
+  "log": "logs/run_20261119-103451.log",
   "artifacts": {
     "clean_csv": "artifacts/analyst/clean_data.csv",
     "contract_json": "artifacts/analyst/dataset_contract.json",
@@ -73,6 +73,7 @@
     "metrics_json": "artifacts/scientist/metrics.json",
     "model_pkl": "artifacts/scientist/model.pkl",
     "evaluation_report": "artifacts/scientist/evaluation_report.md",
+    "value_ranking": "artifacts/scientist/value_ranking.csv",
     "model_card": "artifacts/scientist/model_card.md",
     "insights": "artifacts/analyst/insights.md",
     "eda_report": "artifacts/analyst/eda_report.html"

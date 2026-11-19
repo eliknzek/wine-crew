@@ -8,6 +8,7 @@ no API key. Form options come from the categories the model learned
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -288,3 +289,16 @@ def sort_countries(countries: list[str]) -> list[str]:
 def round_for_display(value: float, decimals: int = 2) -> float:
     """Round for a table cell, turning -0.0 into 0.0 (R² of -0.0001 shows as 0.00, not -0.00)."""
     return round(float(value), decimals) + 0.0
+
+
+def localize_countries(text: str) -> str:
+    """Show every country name from COUNTRY_HE in text as 'אוסטריה (Austria)'. Display only.
+
+    Longest names first, so "South Africa" is replaced as one name. A name is replaced only
+    when no Latin letter touches it ("US" is left alone inside "USD"), and a name that is
+    already labeled ("ישראל (Israel)") is not labeled again.
+    """
+    for name in sorted(COUNTRY_HE, key=len, reverse=True):
+        pattern = re.compile(rf"(?<![A-Za-z(]){re.escape(name)}(?![A-Za-z)])")
+        text = pattern.sub(lambda m: country_label(m.group(0)), text)
+    return text

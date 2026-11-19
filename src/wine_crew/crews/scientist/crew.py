@@ -31,6 +31,7 @@ from wine_crew.tools.eda_tools import insight_number_violations  # noqa: E402
 from wine_crew.tools.model_report import (  # noqa: E402
     METRICS_TABLE_PLACEHOLDER,
     fill_metrics_table,
+    format_counts,
     model_card_style_violations,
 )
 
@@ -202,7 +203,7 @@ def run_scientist(config: dict[str, Any] | None = None, out_dir: str | Path | No
 
     outputs = {t.name or str(i): t.raw for i, t in enumerate(result.tasks_output)}
     metrics = json.loads(scientist.paths["metrics_json"].read_text(encoding="utf-8"))
-    card = fill_metrics_table(strip_fences(result.tasks_output[3].raw), metrics)
+    card = format_counts(fill_metrics_table(strip_fences(result.tasks_output[3].raw), metrics), metrics)
     card_path.parent.mkdir(parents=True, exist_ok=True)
     card_path.write_text(card + "\n", encoding="utf-8")
 

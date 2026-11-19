@@ -18,6 +18,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.ticker import FuncFormatter, MaxNLocator  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
@@ -33,7 +34,7 @@ CHART_NAMES = [
 CHART_TITLES = {
     "points_distribution": "Points distribution",
     "price_distribution_log": "Price distribution (log scale)",
-    "points_vs_log_price": "Points vs log price",
+    "points_vs_log_price": "Points vs price (log scale)",
     "by_country": "Median points and price by country",
     "by_variety": "Median points and price by variety",
     "points_by_vintage": "Points by vintage",
@@ -176,6 +177,7 @@ def eda_summary(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
             "top_country": str(country_share.index[0]),
             "top_country_share_pct": _r(country_share.iloc[0], 2),
             "top3_share_pct": _r(country_share.iloc[:3].sum(), 2),
+            "top3_countries": [str(c) for c in country_share.index[:3]],
             "shares_pct": {str(k): _r(v, 2) for k, v in country_share.iloc[: eda["top_n"]].items()},
         },
     }
@@ -242,12 +244,35 @@ FORBIDDEN_PHRASES = {
 VALUE_SUBHEADINGS = ["### מדינות", "### זנים"]
 MISSING_TERMS = ["נתוני אזור", "שם הסדרה/היין"]
 PLATEAU_PHRASE = "כל הכפלה של המחיר מוסיפה רק"
+# Fixed lines of the insights.md templates (crews/analyst/tasks.yaml); the style check
+# requires each one, and checks every number in them against the summary.
+OPENING_LINE = "- הניקוד עולה עם המחיר, אבל ככל שהמחיר גבוה יותר העלייה קטנה."
+VALUE_DEFINITION = re.compile(
+    r"נכללו מדינות וזנים שהניקוד החציוני שלהם הוא (\d+) ומעלה והמחיר החציוני שלהם הוא \$(\d+) ומטה\. "
+    r"אלה הניקוד החציוני והמחיר החציוני של כלל היינות\.")
+BIAS_LINE = re.compile(
+    r"- (\d+)% מהיינות בנתונים הם מ-(.+?), ו-(\d+)% מגיעים משלוש המדינות המובילות: (.+?)\.(?:\n|$)")
+MISSING_LINE = re.compile(
+    r"- ערכים חסרים: ל-(\d+)% מהיינות חסרים נתוני אזור, ול-(\d+)% חסר שם הסדרה/היין\.")
+RECOMMEND_COUNTRIES = "- מדינות שכדאי להתחיל מהן: "
+RECOMMEND_VARIETIES = "- זנים שכדאי להתחיל מהם: "
 
 
 def _price(x: float) -> str:
     return f"${x:g}"
 _TRAILING_ZERO = re.compile(r"(?<![\d.])\d+\.0(?!\d)")
 _LONG_PERCENT = re.compile(r"(?<![\d.])\d+\.\d{2,}\s*%")
+
+
+def _is_rounding(written: str, value: Any) -> bool:
+    """True if the whole number written is value rounded (either way at exactly .5)."""
+    return value is not None and abs(int(written) - float(value)) <= 0.5
+
+
+def hebrew_join(names: list[str], bold: bool = False) -> str:
+    """'A', 'A ו-B', 'A, B ו-C' (optionally each name in **bold**)."""
+    items = [f"**{n}**" if bold else n for n in names]
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " ו-" + items[-1]
 
 
 def _section(text: str, heading: str) -> str:
@@ -306,11 +331,67 @@ def insight_style_violations(text: str, summary: dict[str, Any]) -> list[str]:
                 out.append(f"section '{INSIGHT_HEADINGS[idx]}' must use the template "
                            f"'{expected}, {PLATEAU_PHRASE} <gain> נקודות'")
 
+    out += _template_line_violations(text, summary)
+
     allowed ={r["name"] for r in summary.get("value_countries", []) + summary.get("value_varieties", [])}
     candidates = [r["name"] for r in summary.get("by_country", []) + summary.get("by_variety", [])]
     for name in _names_in(value_section, candidates + sorted(allowed)):
         if name not in allowed:
             out.append(f"{name} is not in value_countries or value_varieties; name only those")
+    return out
+
+
+def _template_line_violations(text: str, summary: dict[str, Any]) -> list[str]:
+    """The fixed template lines: each must be present, and its numbers and names must match."""
+    out: list[str] = []
+    h1, h2, h3, h4 = (_section(text, h) for h in INSIGHT_HEADINGS)
+
+    if OPENING_LINE not in h1:
+        out.append(f"section 1 must start with the line '{OPENING_LINE}'")
+
+    match = VALUE_DEFINITION.search(h2)
+    if not match:
+        out.append("section 2 must use the definition template 'נכללו מדינות וזנים שהניקוד החציוני שלהם הוא ...'")
+    elif ("overall_median_points" in summary and "overall_median_price" in summary
+          and not (_is_rounding(match.group(1), summary["overall_median_points"])
+                   and _is_rounding(match.group(2), summary["overall_median_price"]))):
+        out.append("the section 2 definition must use overall_median_points and overall_median_price, rounded")
+
+    bias = summary.get("country_bias", {})
+    if bias.get("top3_countries"):
+        match = BIAS_LINE.search(h3)
+        expected_names = hebrew_join(bias["top3_countries"])
+        if not match:
+            out.append("section 3 must use the template '- <top_country_share_pct>% מהיינות בנתונים הם מ-"
+                       "<top_country>, ו-<top3_share_pct>% מגיעים משלוש המדינות המובילות: <top3_countries>.'")
+        else:
+            if not _is_rounding(match.group(1), bias.get("top_country_share_pct")):
+                out.append(f"the section 3 share of {bias.get('top_country')} must be "
+                           "top_country_share_pct rounded to a whole number")
+            if match.group(2) != bias.get("top_country"):
+                out.append(f"section 3 must name the top country as {bias.get('top_country')}")
+            if not _is_rounding(match.group(3), bias.get("top3_share_pct")):
+                out.append("the section 3 share of the top three must be top3_share_pct rounded to a whole number")
+            if match.group(4) != expected_names:
+                out.append(f"section 3 must list the top three countries as '{expected_names}'")
+
+    match = MISSING_LINE.search(h3)
+    missing = summary.get("missing_pct", {})
+    if not match:
+        out.append("section 3 must use the template '- ערכים חסרים: ל-<region_1>% מהיינות חסרים נתוני אזור, "
+                   "ול-<designation>% חסר שם הסדרה/היין.'")
+    elif missing and not (_is_rounding(match.group(1), missing.get("region_1"))
+                          and _is_rounding(match.group(2), missing.get("designation"))):
+        out.append("the missing-values line must use missing_pct.region_1 and missing_pct.designation, rounded")
+
+    for prefix, key in ((RECOMMEND_COUNTRIES, "value_countries"), (RECOMMEND_VARIETIES, "value_varieties")):
+        line = next((ln.rstrip() for ln in h4.splitlines() if ln.startswith(prefix)), None)
+        names = [r["name"] for r in summary.get(key, [])][:2]
+        if line is None:
+            out.append(f"section 4 must include the line '{prefix}...'")
+        elif names and line != f"{prefix}{hebrew_join(names, bold=True)}.":
+            out.append(f"section 4 must read '{prefix}{hebrew_join(names, bold=True)}.' "
+                       f"(the first two entries of {key})")
     return out
 
 
@@ -322,6 +403,17 @@ def _new_fig(config: dict[str, Any], ncols: int = 1):
     return plt.subplots(1, ncols, figsize=tuple(eda["chart_size"]), dpi=eda["chart_dpi"])
 
 
+def dollar_label(value: float, _pos: Any = None) -> str:
+    """Tick label for a price axis: $10, $100, $1,000."""
+    return f"${value:,.0f}"
+
+
+DOLLARS = FuncFormatter(dollar_label)
+WHOLE_YEAR = FuncFormatter(lambda value, _pos=None: f"{value:.0f}")
+THOUSANDS = FuncFormatter(lambda value, _pos=None: f"{value:,.0f}")   # 10,000
+PLATEAU_LABEL = "Gains slow from {price}"
+
+
 def _save(fig, path: Path, config: dict[str, Any]) -> Path:
     fig.tight_layout()
     fig.savefig(path, dpi=config["eda"]["chart_dpi"], format="png", metadata={"Software": None})
@@ -329,7 +421,7 @@ def _save(fig, path: Path, config: dict[str, Any]) -> Path:
     return path
 
 
-def _group_chart(df: pd.DataFrame, col: str, n: int, title: str, config: dict[str, Any], path: Path) -> Path:
+def _group_chart(df: pd.DataFrame, col: str, n: int, title: str, config: dict[str, Any]):
     groups = _top_groups(df, col, n)[::-1]  # largest at top of a horizontal bar chart
     rows = {r["name"]: r for r in _group_table(df, col, groups)}
     fig, (ax1, ax2) = _new_fig(config, ncols=2)
@@ -338,51 +430,65 @@ def _group_chart(df: pd.DataFrame, col: str, n: int, title: str, config: dict[st
     ax1.set_xlabel("Median points")
     ax2.barh(groups, [rows[g]["median_price"] for g in groups], color="#c9a227")
     ax2.set_xlabel("Median price (USD)")
+    ax2.xaxis.set_major_formatter(DOLLARS)
     ax2.set_yticklabels([])
     fig.suptitle(title)
-    return _save(fig, path, config)
+    return fig
 
 
-def make_charts(clean_df: pd.DataFrame, out_dir: str | Path, config: dict[str, Any]) -> dict[str, Path]:
-    """Write the EDA charts from docs/spec.md as PNG files. Returns {name: path}."""
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+def _chart_figures(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
+    """Build the EDA charts as matplotlib figures, in CHART_NAMES order (not saved)."""
     df = clean_df
-    n = config["eda"]["top_n"]
-    paths: dict[str, Path] = {}
+    eda = config["eda"]
+    n = eda["top_n"]
+    figs: dict[str, Any] = {}
 
     fig, ax = _new_fig(config)
     ax.hist(df["points"], bins=np.arange(79.5, 101.5, 1), color="#7b2d43", edgecolor="white")
     ax.set(xlabel="Points", ylabel="Wines", title=CHART_TITLES["points_distribution"])
-    paths["points_distribution"] = _save(fig, out_dir / "points_distribution.png", config)
+    figs["points_distribution"] = fig
 
     fig, ax = _new_fig(config)
     ax.hist(df["price"], bins=np.logspace(np.log10(df["price"].min()), np.log10(df["price"].max()), 50),
             color="#c9a227", edgecolor="white")
     ax.set_xscale("log")
+    ax.xaxis.set_major_formatter(DOLLARS)
+    ax.yaxis.set_major_formatter(THOUSANDS)
     ax.set(xlabel="Price (USD, log scale)", ylabel="Wines", title=CHART_TITLES["price_distribution_log"])
-    paths["price_distribution_log"] = _save(fig, out_dir / "price_distribution_log.png", config)
+    figs["price_distribution_log"] = fig
 
+    # Price on a log axis (ticks in $) instead of log(price); the file name stays the same.
     fig, ax = _new_fig(config)
-    hb = ax.hexbin(df["log_price"], df["points"], gridsize=40, bins="log", cmap="viridis", mincnt=1)
+    hb = ax.hexbin(df["price"].astype("float64"), df["points"], gridsize=40, bins="log", xscale="log",
+                   cmap="viridis", mincnt=1)
     fig.colorbar(hb, ax=ax, label="Wines (log)")
-    ax.set(xlabel="log(price)", ylabel="Points", title=CHART_TITLES["points_vs_log_price"])
-    paths["points_vs_log_price"] = _save(fig, out_dir / "points_vs_log_price.png", config)
+    ax.xaxis.set_major_formatter(DOLLARS)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))   # 80, 85, 90, no 92.5
+    plateau = _price_bands(df, eda["price_bands"], eda["plateau_gain_per_doubling"])["plateau_from_price"]
+    if plateau is not None:
+        ax.axvline(plateau, color="#d62728", linestyle="--", linewidth=1.5)
+        # Bottom right of the line is empty (few cheap-scoring expensive wines), so the label
+        # sits there on a white box instead of over the dense top of the chart.
+        ax.text(plateau, 0.03, " " + PLATEAU_LABEL.format(price=dollar_label(plateau)),
+                transform=ax.get_xaxis_transform(), color="#d62728", ha="left", va="bottom", fontsize=9,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 2})
+    ax.set(xlabel="Price (USD, log scale)", ylabel="Points", title=CHART_TITLES["points_vs_log_price"])
+    figs["points_vs_log_price"] = fig
 
-    paths["by_country"] = _group_chart(
-        df, "country", n, f"{CHART_TITLES['by_country']} (top {n} by count)", config, out_dir / "by_country.png")
-    paths["by_variety"] = _group_chart(
-        df, "variety", n, f"{CHART_TITLES['by_variety']} (top {n} by count)", config, out_dir / "by_variety.png")
+    figs["by_country"] = _group_chart(df, "country", n, f"{CHART_TITLES['by_country']} (top {n} by count)", config)
+    figs["by_variety"] = _group_chart(df, "variety", n, f"{CHART_TITLES['by_variety']} (top {n} by count)", config)
 
     vint = df.dropna(subset=["vintage"])
     vg = vint.groupby(vint["vintage"].astype(int))["points"]
     vstats = pd.DataFrame({"count": vg.size(), "mean": vg.mean()})
-    vstats = vstats[vstats["count"] >= config["eda"]["vintage_min_count"]]
+    vstats = vstats[vstats["count"] >= eda["vintage_min_count"]]
     fig, ax = _new_fig(config)
     ax.plot(vstats.index, vstats["mean"], marker="o", color="#7b2d43")
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))   # 2010, never 2010.5
+    ax.xaxis.set_major_formatter(WHOLE_YEAR)
     ax.set(xlabel="Vintage", ylabel="Mean points",
-           title=f"{CHART_TITLES['points_by_vintage']} (vintages with >= {config['eda']['vintage_min_count']} wines)")
-    paths["points_by_vintage"] = _save(fig, out_dir / "points_by_vintage.png", config)
+           title=f"{CHART_TITLES['points_by_vintage']} (vintages with >= {eda['vintage_min_count']} wines)")
+    figs["points_by_vintage"] = fig
 
     missing = (df.isna().mean() * 100).sort_values(kind="mergesort")
     fig, ax = _new_fig(config)
@@ -390,9 +496,16 @@ def make_charts(clean_df: pd.DataFrame, out_dir: str | Path, config: dict[str, A
     for y, v in enumerate(missing.values):
         ax.text(v + 0.3, y, f"{v:.1f}%", va="center", fontsize=8)
     ax.set(xlabel="Missing (%)", title=CHART_TITLES["missing_values"])
-    paths["missing_values"] = _save(fig, out_dir / "missing_values.png", config)
+    figs["missing_values"] = fig
+    return figs
 
-    return paths
+
+def make_charts(clean_df: pd.DataFrame, out_dir: str | Path, config: dict[str, Any]) -> dict[str, Path]:
+    """Write the EDA charts from docs/spec.md as PNG files. Returns {name: path}."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return {name: _save(fig, out_dir / f"{name}.png", config)
+            for name, fig in _chart_figures(clean_df, config).items()}
 
 
 # --------------------------------------------------------------------------- HTML report
@@ -419,7 +532,7 @@ def build_html_report(summary: dict[str, Any], chart_paths: dict[str, str | Path
         ("Points mean / median", f"{pts['mean']:.2f} / {pts['median']:.0f}"),
         ("Price median (p05–p95)", f"${price['median']:.0f} (${price['p05']:.0f}–${price['p95']:.0f})"),
         ("Correlation points ~ log price", f"{summary['corr_points_log_price']:.3f}"),
-        ("Score stops rising from", plateau or "not within the bands"),
+        ("Gains slow from", plateau or "not within the bands"),
         ("Largest country share", f"{bias['top_country']} {bias['top_country_share_pct']:.1f}%"),
     ]
     facts_html = "".join(f"<tr><th>{html.escape(k)}</th><td>{html.escape(v)}</td></tr>" for k, v in key_facts)

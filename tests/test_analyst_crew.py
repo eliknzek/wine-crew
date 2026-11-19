@@ -11,7 +11,7 @@ from wine_crew.crews.analyst.crew import (
     make_insights_guardrail,
     strip_fences,
 )
-from wine_crew.tools.eda_tools import INSIGHT_HEADINGS
+from wine_crew.tools.eda_tools import INSIGHT_HEADINGS, OPENING_LINE
 
 EXPECTED_TOOLS = {
     "Data Cleaner": {"load_raw", "clean_data"},
@@ -63,14 +63,22 @@ class _Out:
 
 def _insights(bias_line: str) -> str:
     h1, h2, h3, h4 = INSIGHT_HEADINGS
-    return (f"{h1}\n- מאטה.\n\n{h2}\n### מדינות\n- Austria.\n### זנים\n- Riesling.\n\n"
-            f"{h3}\n{bias_line}\n- ערכים חסרים: ללא נתוני אזור וללא שם הסדרה/היין.\n\n{h4}\n- המלצה.")
+    definition = ("נכללו מדינות וזנים שהניקוד החציוני שלהם הוא 88 ומעלה והמחיר החציוני שלהם הוא $25 ומטה. "
+                  "אלה הניקוד החציוני והמחיר החציוני של כלל היינות.")
+    return (f"{h1}\n{OPENING_LINE}\n\n{h2}\n{definition}\n### מדינות\n- Austria.\n### זנים\n- Riesling.\n\n"
+            f"{h3}\n{bias_line}\n- ערכים חסרים: ל-16% מהיינות חסרים נתוני אזור, ול-29% חסר שם הסדרה/היין.\n\n"
+            f"{h4}\n- מדינות שכדאי להתחיל מהן: **Austria**.\n- זנים שכדאי להתחיל מהם: ...")
+
+
+SUMMARY_FOR_GUARDRAIL = {"country_bias": {"top_country_share_pct": 45.04}, "top_n": 15,
+                         "value_countries": [{"name": "Austria"}],
+                         "overall_median_points": 88.0, "overall_median_price": 25.0,
+                         "missing_pct": {"region_1": 16.1, "designation": 28.73}}
 
 
 def test_guardrail_accepts_summary_numbers_and_rejects_invented_ones(tmp_path):
     summary = tmp_path / "eda_summary.json"
-    summary.write_text(json.dumps({"country_bias": {"top_country_share_pct": 45.04}, "top_n": 15,
-                                   "value_countries": [{"name": "Austria"}]}))
+    summary.write_text(json.dumps(SUMMARY_FOR_GUARDRAIL))
     guardrail = make_insights_guardrail(summary)
     good = _insights("- 45% מארה\"ב")
     ok, text = guardrail(_Out(f"```markdown\n{good}\n```"))

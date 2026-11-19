@@ -133,7 +133,7 @@ with overview:
 # --------------------------------------------------------------------------- analysis
 with analysis:
     if data["insights"]:
-        st.markdown(data["insights"])
+        st.markdown(ad.localize_countries(data["insights"]))
     else:
         _missing("artifacts/analyst/insights.md")
     st.divider()

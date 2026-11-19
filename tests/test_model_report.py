@@ -222,3 +222,43 @@ def test_fill_metrics_table_puts_one_blank_line_around_table(before, after):
 def test_filled_card_passes_number_check(us_metrics):
     filled = fill_metrics_table(card(us_metrics), us_metrics)
     assert insight_number_violations(filled, us_metrics) == []
+
+
+# --------------------------------------------------------------------------- thousands separators
+
+
+from wine_crew.tools.model_report import _fmt2, format_counts  # noqa: E402
+
+COUNTS = {"data": {"rows": 111537, "n_train": 89229, "n_test": 22308, "collected_year": 2017, "seed": 42}}
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("- 111537 יינות אחרי ניקוי: 89229 לאימון ו-22308 לבדיקה.",
+     "- 111,537 יינות אחרי ניקוי: 89,229 לאימון ו-22,308 לבדיקה."),
+    ("סה\"כ 111537.", "סה\"כ 111,537."),                                   # end of sentence
+    ("נאספו ב-2017, seed 42.", "נאספו ב-2017, seed 42."),               # years and the seed stay
+    ("כבר עם פסיקים: 111,537", "כבר עם פסיקים: 111,537"),              # no double commas
+    ("1115370 ו-0.111537", "1115370 ו-0.111537"),                       # not inside other numbers
+])
+def test_format_counts(text, expected):
+    assert format_counts(text, COUNTS) == expected
+
+
+def test_format_counts_keeps_the_number_check_passing():
+    text = "- 111537 יינות: 89229 לאימון ו-22308 לבדיקה, נאספו ב-2017."
+    assert insight_number_violations(text, COUNTS) == []
+    assert insight_number_violations(format_counts(text, COUNTS), COUNTS) == []
+
+
+def test_fmt2_adds_thousands_separators():
+    assert _fmt2(1234.5) == "1,234.50"
+    assert _fmt2(-0.0001) == "0.00"
+    assert _fmt2(1.6895) == "1.69"
+
+
+def test_card_after_fill_and_format(us_metrics):
+    us_metrics["data"].update(rows=111537, n_train=89229, n_test=22308)
+    text = card(us_metrics)
+    final = format_counts(fill_metrics_table(text, us_metrics), us_metrics)
+    assert "111,537" in final and "111537" not in final
+    assert insight_number_violations(final, us_metrics) == []
