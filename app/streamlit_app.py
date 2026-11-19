@@ -248,7 +248,9 @@ with value_tab:
                                                      placeholder="כל הזנים", help="אפשר לבחור כמה זנים.")
             with c_more.popover("סינון נוסף", width="stretch", key="value_more"):
                 price_min = st.number_input("מחיר מינימלי ($)", lo, hi, lo, step=1.0, key="value_price_min")
-                top = st.slider("מספר יינות", 10, 200, 50, step=10, key="value_top")
+                # A number field, not a slider: Streamlit's slider cannot fill right to left
+                # without breaking dragging. Same key, range, default and step as before.
+                top = int(st.number_input("מספר יינות", 10, 200, 50, step=10, key="value_top"))
         result = ad.filter_ranking(ranking, chosen_countries, chosen_varieties, price_min, price_max, top)
         st.markdown("ציון שווי = הניקוד בפועל פחות הניקוד שהמודל צפה ליין כזה (מחיר, מקור, זן ובציר). "
                     "התחזית לכל יין מגיעה ממודל שלא ראה אותו באימון (out-of-fold).",

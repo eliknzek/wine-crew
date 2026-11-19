@@ -91,7 +91,7 @@ def test_value_filter(app):
 
 
 def test_missing_vintage_shown_empty(app):
-    app.slider(key="value_top").set_value(200).run()
+    app.number_input(key="value_top").set_value(200).run()   # a number field since the filter bar round
     app.multiselect(key="value_countries").select("France").run()
     table = next(d for d in app.dataframe if "value_score" in d.value.columns)
     vintages = table.value["vintage"]
