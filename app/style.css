@@ -62,7 +62,9 @@
   position: relative; right: 50%; transform: translateX(50%);
   /* Background edge to edge; the text inside keeps the content column's width: side padding =
      (window - content width) / 2, where content width = min(page-max, window) - 2 * page-pad. */
-  padding: 4.5rem max(var(--page-pad), calc(50vw - var(--page-max) / 2 + var(--page-pad))) 3.5rem;
+  /* Compact band: less space above and below the text (the title keeps its size). */
+  padding: 1.75rem max(var(--page-pad), calc(50vw - var(--page-max) / 2 + var(--page-pad))) 1rem;
+  gap: 0.35rem;   /* between title, caption, intro and divider (Streamlit's default is 1rem) */
   background:
     linear-gradient(rgba(var(--hero-overlay-rgb), var(--hero-overlay-min)),
                     rgba(var(--hero-overlay-rgb), calc(var(--hero-overlay-min) + 0.12))),
@@ -74,17 +76,22 @@
 .st-key-hero .stMarkdown p { text-align: center; color: #FFFFFF; }
 .st-key-hero [data-testid="stHeading"] h1 {
   font-size: clamp(1.9rem, 5.5vw, 3.2rem);
+  padding: 0.15rem 0 0.25rem;   /* Streamlit pads h1 heavily; the band's own padding is enough */
   /* Break only between words, never inside one. */
   word-break: keep-all; overflow-wrap: normal; hyphens: none;
 }
 /* Streamlit dims captions (opacity 0.6); inside the hero that would break the 4.5:1 contrast. */
 .st-key-hero [data-testid="stCaptionContainer"] { opacity: 1; }
+/* Streamlit's negative margins on captions and markdown assume a 1rem gap; with the compact
+   band's smaller gap they made the caption overlap the intro. */
+.st-key-hero [data-testid="stCaptionContainer"], .st-key-hero [data-testid="stMarkdownContainer"],
+.st-key-hero [data-testid="stCaptionContainer"] p { margin-top: 0 !important; margin-bottom: 0 !important; }
 .st-key-hero [data-testid="stCaptionContainer"] p { color: #FFFFFF; }
-.st-key-hero .stMarkdown p { max-width: 46rem; margin-inline: auto; font-size: 1.05rem; }
+.st-key-hero .stMarkdown p { max-width: 46rem; margin-inline: auto; margin-bottom: 0; font-size: 1.05rem; }
 .st-key-hero strong { color: #FFFFFF; }
 [data-testid="stHeaderActionElements"] { display: none; }   /* no link (anchor) icon next to headings */
 /* Divider under the hero, inside the band */
-.st-key-hero .wine-divider { filter: brightness(1.6); }
+.st-key-hero .wine-divider { filter: brightness(1.6); margin: 0.35rem auto 0; }   /* full 28px height kept */
 
 /* ---- Ornamental divider ---------------------------------------------------------------- */
 .wine-divider {
@@ -308,11 +315,6 @@
 }
 .st-key-kpi_status_passed [data-testid="stMetricValue"]::before { background-image: url("{{SVG:status-passed}}"); }
 .st-key-kpi_status_failed [data-testid="stMetricValue"]::before { background-image: url("{{SVG:status-failed}}"); }
-/* Hero title: the drawn glass instead of an emoji */
-.st-key-hero [data-testid="stHeading"] h1::before {
-  content: ""; display: inline-block; width: 0.9em; height: 0.9em; margin-inline-end: 0.3em;
-  vertical-align: -0.1em; background: url("{{SVG:icon-glass-light}}") center / contain no-repeat;
-}
 
 /* ---- Footer ---------------------------------------------------------------------------- */
 .wine-footer {
@@ -351,8 +353,8 @@
   .st-key-wine_card { background-size: auto 38%; background-position: left 0.5rem bottom 0.5rem; }
   :root { --page-pad: 1rem; }
   [data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
-  .st-key-hero { padding: 3rem var(--page-pad) 2.25rem; }
-  .st-key-hero .stMarkdown p { font-size: 0.95rem; }
+  .st-key-hero { padding: 0.75rem var(--page-pad) 0.5rem; }
+  .st-key-hero .stMarkdown p { font-size: 0.92rem; line-height: 1.45; }
   [data-testid="stMetricValue"] { font-size: 1.4rem; }
   /* KPI tiles: 2 per row (Streamlit would stack every column on its own row). */
   [class*="st-key-kpis_"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.75rem; }
