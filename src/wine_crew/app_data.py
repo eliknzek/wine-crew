@@ -8,6 +8,7 @@ no API key. Form options come from the categories the model learned
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+import yaml
 
 from wine_crew.config import load_config, resolve_path
 
@@ -339,3 +341,125 @@ def tokens_text(tokens: dict[str, int]) -> str:
     return (f"{tokens.get('requests', 0):,} בקשות · טוקני קלט: {tokens.get('input_tokens', 0):,} "
             f"(מהם {tokens.get('cached_input_tokens', 0):,} מהמטמון) · "
             f"טוקני פלט: {tokens.get('output_tokens', 0):,}")
+
+
+# --------------------------------------------------------------------------- numbers in words
+
+# WineEnthusiast's official rating scale (lowest points of each band).
+SCORE_SCALE = [(98, "קלאסי"), (94, "יוצא דופן"), (90, "מצוין"), (87, "טוב מאוד"), (83, "טוב"), (80, "סביר")]
+POINTS_MIN, POINTS_MAX = 80, 100
+
+# One plain sentence per term, shown as a ⓘ (help=) next to it.
+GLOSSARY = {
+    "ציון שווי": "כמה נקודות היין קיבל מעל הניקוד שצפוי ליין כזה במחיר הזה (או מתחת, כשהציון שלילי). "
+                 "\"יין כזה\": אותו מקור, זן ובציר.",
+    "ניקוד צפוי": "הניקוד שהמודל נותן ליין לפי המחיר, המקור, הזן והבציר, בלי לטעום אותו.",
+    "חציון": "הערך האמצעי: חצי מהיינות מעליו וחצי מתחתיו.",
+    "out-of-fold": "התחזית לכל יין באה ממודל שלא ראה את היין הזה באימון, כך שהיא לא \"מכירה את התשובה\".",
+    "MAE": "השגיאה הממוצעת, בנקודות ניקוד, בין התחזית לניקוד האמיתי. ככל שהיא נמוכה יותר, המודל מדויק יותר.",
+}
+
+
+def _clip_points(value: float) -> int:
+    """Round half up (82.5 -> 83, not Python's banker's 82) and clip to 80-100."""
+    return int(min(max(math.floor(value + 0.5), POINTS_MIN), POINTS_MAX))
+
+
+def score_label(points: float) -> str:
+    """The WineEnthusiast word for a score, after rounding to a whole number (clipped to 80-100)."""
+    rounded = _clip_points(points)
+    return next(label for low, label in SCORE_SCALE if rounded >= low)
+
+
+def value_sentence(score: float) -> str:
+    """value_score in words: how far above (or below) the points expected for such a wine at this price."""
+    shown = round(float(score), 1)
+    if shown == 0:
+        return "בדיוק הניקוד שצפוי ליין כזה במחיר הזה"
+    side = "מעל ה" if shown > 0 else "מתחת ל"
+    return f"{abs(shown):.1f} נקודות {side}ניקוד שצפוי ליין כזה במחיר הזה"
+
+
+def model_mae(metrics: dict[str, Any]) -> float:
+    """Test MAE of the selected model."""
+    return float(metrics["models"][metrics["selected"]]["test"]["mae"])
+
+
+def accuracy_sentence(metrics: dict[str, Any]) -> str:
+    return f"המודל טועה בממוצע בכ-{model_mae(metrics):.1f} נקודות"
+
+
+def residual_band(ranking: pd.DataFrame, low_q: float = 0.1, high_q: float = 0.9) -> tuple[float, float]:
+    """10th and 90th percentile of points - predicted (out-of-fold predictions) in the ranking file.
+    8 in 10 wines scored within [predicted + low, predicted + high]."""
+    gaps = (ranking["points"] - ranking["predicted"]).dropna()
+    return float(gaps.quantile(low_q)), float(gaps.quantile(high_q))
+
+
+def prediction_range(points: float, band: tuple[float, float]) -> tuple[int, int]:
+    """Whole-number range for the real score, clipped to 80-100.
+
+    Rounded inward (ceil / floor): real scores are whole numbers, so this range holds exactly
+    the scores inside the band. Rounding to nearest would widen it (about 87% instead of 80%).
+    """
+    low = math.ceil(points + band[0] - 1e-9)
+    high = math.floor(points + band[1] + 1e-9)
+    return min(max(low, POINTS_MIN), POINTS_MAX), min(max(high, POINTS_MIN), POINTS_MAX)
+
+
+def prediction_sentence(points: float, band: tuple[float, float]) -> str:
+    low, high = prediction_range(points, band)
+    return (f"{_clip_points(points)}: {score_label(points)}. "
+            f"ב-8 מתוך 10 יינות דומים, הניקוד האמיתי היה בין {low} ל-{high}.")
+
+
+# --------------------------------------------------------------------------- the Flow, step by step
+
+CREW_DIRS = {"crew1": "analyst", "crew2": "scientist"}
+# Order in which the Flow runs them (flow.py). Training is a task inside Crew 2.
+FLOW_STEPS = [
+    ("preflight", "בדיקה מקדימה"),
+    ("crew1", "Crew 1 (Data Analyst)"),
+    ("contract", "שער 1 (חוזה נתונים)"),
+    ("crew2", "Crew 2 (Data Scientist, כולל אימון)"),
+    ("features", "שער 2 (features)"),
+    ("model", "שער 3 (מודל)"),
+]
+STEP_ICONS = {"passed": "✅", "failed": "❌", "not_run": "⏺"}
+AGENT_HE = {
+    "data_cleaner": "טוען ומנקה את הנתונים הגולמיים",
+    "eda_analyst": "מחשב סיכומים ומייצר גרפים ודוח",
+    "insights_writer": "כותב את הממצאים מתוך הסיכומים",
+    "contract_author": "כותב ומאמת את חוזה הנתונים",
+    "contract_validator": "בודק שהנתונים עומדים בחוזה",
+    "feature_engineer": "בונה את ה-features למודל",
+    "model_trainer": "מאמן ומשווה את המודלים",
+    "model_card_writer": "כותב את כרטיס המודל",
+}
+
+
+def flow_steps(summary: dict[str, Any]) -> list[dict[str, str]]:
+    """Each Flow step with its status from run_summary.json: passed, failed or not_run."""
+    checks, crews = summary.get("checks", {}), summary.get("crews", {})
+    failed = summary.get("failed_check")
+    steps = []
+    for key, label in FLOW_STEPS:
+        if key in CREW_DIRS:
+            status = "passed" if key in crews else "failed" if failed == key else "not_run"
+        elif key in checks:
+            status = "passed" if checks[key].get("passed") else "failed"
+        else:
+            status = "not_run"
+        steps.append({"key": key, "label": label, "status": status})
+    return steps
+
+
+def flow_line(steps: list[dict[str, str]]) -> str:
+    return " ← ".join(f"{STEP_ICONS[s['status']]} {s['label']}" for s in steps)
+
+
+def agent_roles(crew: str) -> list[tuple[str, str]]:
+    """(agent key, role) for each agent of crew1/crew2, read from its agents.yaml (no crewai)."""
+    path = Path(__file__).resolve().parent / "crews" / CREW_DIRS[crew] / "agents.yaml"
+    agents = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return [(key, spec["role"]) for key, spec in agents.items()]
