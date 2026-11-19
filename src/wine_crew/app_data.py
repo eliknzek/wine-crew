@@ -396,6 +396,11 @@ def value_sentence(score: float) -> str:
     return f"{abs(shown):.1f} נקודות {side}ניקוד שצפוי ליין כזה במחיר הזה"
 
 
+def signed(value: float) -> str:
+    """'+9.1' kept as one left-to-right unit inside Hebrew text (Unicode isolate), so the sign stays put."""
+    return f"\u2066{float(value):+.1f}\u2069"
+
+
 def model_mae(metrics: dict[str, Any]) -> float:
     """Test MAE of the selected model."""
     return float(metrics["models"][metrics["selected"]]["test"]["mae"])

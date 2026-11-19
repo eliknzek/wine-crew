@@ -67,6 +67,7 @@ TAB_INTRO = {
     "learned": "מה למדנו מביקורות היין עצמן: הממצאים המרכזיים והגרפים שמהם הם עולים.",
     "how": "איך הנתונים עוברים מהקובץ הגולמי למודל, מה נבדק בדרך, ועד כמה המודל מדויק.",
 }
+CHART_TITLE = "הניקוד הצפוי ליין כזה לפי מחיר"   # shown as text above the chart (RTL-safe)
 CREW_TITLES = {"crew1": "Crew 1: Data Analyst", "crew2": "Crew 2: Data Scientist"}
 CHECK_NAMES = {"preflight": "בדיקה מקדימה (קובץ גולמי)", "contract": "שער 1 (חוזה נתונים)",
                "features": "שער 2 (features)", "model": "שער 3 (מודל)"}
@@ -105,14 +106,16 @@ def _curve(model_fingerprint: tuple, row: tuple, prices: tuple, _model, _metrics
 
 def price_chart(curve: pd.DataFrame, chosen: float, chosen_points: float):
     """Predicted points by price (log scale, $ on the axis), with a dot on the chosen price."""
-    x = alt.X("price:Q", title="מחיר", scale=alt.Scale(type="log"), axis=alt.Axis(format="$,.0f"))
+    domain = [float(curve["price"].min()), float(curve["price"].max())]   # the band only, no rounding out
+    x = alt.X("price:Q", title="מחיר", scale=alt.Scale(type="log", domain=domain, nice=False),
+              axis=alt.Axis(format="$,.0f"))
     y = alt.Y("predicted:Q", title="ניקוד צפוי", scale=alt.Scale(zero=False))
     tooltip = [alt.Tooltip("price:Q", title="מחיר", format="$,.0f"),
                alt.Tooltip("predicted:Q", title="ניקוד צפוי", format=".1f")]
     line = alt.Chart(curve).mark_line().encode(x=x, y=y, tooltip=tooltip)
     dot = alt.Chart(pd.DataFrame({"price": [chosen], "predicted": [chosen_points]})).mark_point(
         size=120, filled=True).encode(x=x, y=y, tooltip=tooltip)
-    return (line + dot).properties(title="הניקוד הצפוי ליין כזה לפי מחיר", height=260)
+    return (line + dot).properties(height=260)
 
 
 def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs):
@@ -198,7 +201,7 @@ with value_tab:
             })
         if len(result):
             first = result.iloc[0]
-            st.caption(f"לדוגמה, ליין הראשון ציון שווי {first['value_score']:+.1f}: "
+            st.caption(f"לדוגמה, ליין הראשון ציון שווי {ad.signed(first['value_score'])}, כלומר "
                        f"{ad.value_sentence(first['value_score'])}.")
             st.download_button("הורדת הרשימה (CSV)", ad.ranking_csv(result), file_name="value_wines.csv",
                                mime="text/csv", key="value_csv")
@@ -217,7 +220,8 @@ with value_tab:
                         f"{wine['variety']} · בציר {vintage_text or ad.UNKNOWN} · {ad.money(wine['price'])}")
                     st.markdown(f"ניקוד בפועל: **{ad.score_text(wine['points'])}** · "
                                 f"ניקוד צפוי: {wine['predicted']:.1f}")
-                    st.markdown(f"ציון שווי {wine['value_score']:+.1f}: {ad.value_sentence(wine['value_score'])}.")
+                    st.markdown(f"ציון שווי {ad.signed(wine['value_score'])}, כלומר "
+                                f"{ad.value_sentence(wine['value_score'])}.")
                     st.markdown(ad.variety_rank_sentence(pct, wine["variety"], count))
 
 # --------------------------------------------------------------------------- check a wine
@@ -273,6 +277,7 @@ with predict_tab:
                 curve = _curve(ad.file_fingerprint([ad.model_file(config)]),
                                tuple(sorted((k, v) for k, v in row.items() if k != "price")),
                                tuple(grid), model, metrics)
+                st.markdown(f"**{CHART_TITLE}**")
                 st.altair_chart(price_chart(curve, price, points), width="stretch", key="price_chart")
                 sentence = ad.curve_sentence(curve, price, high)
                 if sentence:
@@ -282,7 +287,7 @@ with predict_tab:
 
                 st.subheader("יינות שכדאי להכיר")
                 similar, levels = ad.similar_wines(ranking, country, variety, price)
-                st.caption(f"עד 5 יינות במחיר {ad.money(price / 1.5)}–{ad.money(price * 1.5)}, "
+                st.caption(f"עד 5 יינות במחיר בין {ad.money(price / 1.5)} ל-{ad.money(price * 1.5)}, "
                            "עם ציון השווי הגבוה ביותר.")
                 if len(similar):
                     shown = similar.assign(

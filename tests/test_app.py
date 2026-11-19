@@ -298,6 +298,7 @@ def _predict(app, country="US", province="California", variety="Pinot Noir", pri
 def test_price_chart_and_sentence_after_prediction(app):
     tab = _predict(app)
     assert len(tab.get("vega_lite_chart")) == 1
+    assert any(m.value == "**הניקוד הצפוי ליין כזה לפי מחיר**" for m in tab.markdown)
     ranking, data = ad.load_ranking(CONFIG), ad.load_all(CONFIG)
     low, high, _ = ad.price_band(ranking, "US", "Pinot Noir")
     row = {"vintage": 2014, "country": "US", "province": "California", "variety": "Pinot Noir",

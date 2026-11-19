@@ -21,6 +21,10 @@ def test_score_text():
     assert ad.score_text(89.5) == "90: מצוין"
 
 
+def test_signed_keeps_sign_with_number():
+    assert ad.signed(9.081) == "\u2066+9.1\u2069" and ad.signed(-0.42) == "\u2066-0.4\u2069"
+
+
 def test_value_sentence():
     assert ad.value_sentence(9.081) == "9.1 נקודות מעל הניקוד שצפוי ליין כזה במחיר הזה"
     assert ad.value_sentence(-0.42) == "0.4 נקודות מתחת לניקוד שצפוי ליין כזה במחיר הזה"
