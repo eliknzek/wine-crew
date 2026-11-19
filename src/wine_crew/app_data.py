@@ -61,6 +61,7 @@ def data_files(config: dict[str, Any]) -> dict[str, Path]:
         "insights": artifact_path(config, "insights"),
         "model_card": sci / "model_card.md",
         "evaluation_report": sci / "evaluation_report.md",
+        "eda_summary": artifact_path(config, "eda_summary"),
     }
 
 
@@ -92,6 +93,7 @@ def load_all(config: dict[str, Any] | None = None) -> dict[str, Any]:
         "insights": read_text(files["insights"]),
         "model_card": read_text(files["model_card"]),
         "evaluation_report": read_text(files["evaluation_report"]),
+        "eda_summary": read_json(files["eda_summary"]),
     }
 
 
@@ -686,3 +688,139 @@ def wine_props(wine) -> list[tuple[str, str]]:
             text = str(value)
         out.append((label, text))
     return out
+
+
+# --------------------------------------------------------------------------- dashboard (KPI tiles and chart data)
+
+# Same headings as eda_tools.INSIGHT_HEADINGS (not imported: it pulls in matplotlib); a test
+# checks they stay equal.
+INSIGHT_HEADINGS = [
+    "## באיזה טווח מחיר העלייה בניקוד מאטה?",
+    "## אילו מדינות וזנים נותנים ניקוד גבוה במחיר נמוך?",
+    "## היכן הנתונים מוטים?",
+    "## המלצות לקנייה",
+]
+
+# Chart series colors. Every one has at least 3:1 contrast against the cream page and the white
+# cards (tests/test_app_text.py), as graphical objects need. Gold is only for reference lines.
+CHART_COLORS = {
+    "main": "#6E0F1A",          # deep wine red: lines, bars, highlighted ("value") points
+    "other": "#8A7A6E",         # muted grey-brown for the rest (3.8:1 on cream)
+    "reference": "#C9A227",     # gold: reference lines only, never a data series
+}
+# One color per WineEnthusiast band, light to dark as the score rises (all >= 3:1).
+SCORE_COLORS = {"סביר": "#9A8478", "טוב": "#B5651D", "טוב מאוד": "#A0522D",
+                "מצוין": "#8C4A3C", "יוצא דופן": "#7B2D43", "קלאסי": "#6E0F1A"}
+
+
+def whole_percent(value: float) -> int:
+    """Round half up to a whole percent (73.54 -> 74), the way insights.md shows shares."""
+    return int(math.floor(float(value) + 0.5))
+
+
+def top_countries_share(eda: dict[str, Any], n: int = 3) -> int:
+    """Whole percent of wines from the n countries with the most wines (by_country)."""
+    rows = sorted(eda["by_country"], key=lambda r: r["count"], reverse=True)[:n]
+    return whole_percent(sum(r["share_pct"] for r in rows))
+
+
+def learned_kpis(eda: dict[str, Any]) -> list[dict[str, str]]:
+    """The four KPI tiles of 'מה למדנו', every number from eda_summary.json."""
+    return [
+        {"label": "יינות בנתונים (אחרי ניקוי)", "value": f"{int(eda['row_count']):,}",
+         "help": "מספר היינות שנשארו אחרי הסרת כפילויות ושורות בלי מחיר, מדינה או זן."},
+        {"label": "מחיר חציוני לבקבוק", "value": money(eda["overall_median_price"]),
+         "help": GLOSSARY["חציון"]},
+        # The range is isolated as one left-to-right unit (in RTL text the dash would flip it to
+        # "100–80"), with word joiners so it never breaks across lines.
+        {"label": "ניקוד חציוני (\u206680\u2060–\u2060100\u2069)", "value": f"{float(eda['overall_median_points']):g}",
+         "help": GLOSSARY["חציון"]},
+        {"label": "שלוש המדינות המובילות (% מהיינות)", "value": f"{top_countries_share(eda)}%",
+         "help": "חלק היינות שמגיעים משלוש המדינות עם הכי הרבה יינות בנתונים."},
+    ]
+
+
+def how_kpis(summary: dict[str, Any], metrics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """KPI tiles of 'איך זה עובד': the last run (run_summary.json) and the model (metrics.json)."""
+    passed = summary.get("status") == "passed"
+    tiles = [
+        {"label": "סטטוס הריצה", "value": "עברה ✅" if passed else "נכשלה ❌"},
+        {"label": "משך", "value": f"{summary['seconds']:.0f} שניות"},
+        {"label": "עלות LLM", "value": f"${summary['total_cost_usd']:.4f}"},
+        {"label": "בקשות ל-LLM", "value": f"{int((summary.get('tokens') or {}).get('requests', 0)):,}"},
+    ]
+    if metrics is not None:
+        selected = metrics["models"][metrics["selected"]]["test"]
+        baseline = metrics["models"]["baseline"]["test"]
+        diff = round(selected["mae"] - baseline["mae"], 2)
+        tiles += [
+            {"label": "MAE של המודל (נקודות)", "value": f"{selected['mae']:.2f}",   # delta: vs the baseline guess
+             "delta": f"{diff:+.2f} מהבסיס", "delta_color": "inverse", "help": GLOSSARY["MAE"]},
+            {"label": "R² (test)", "value": f"{round_for_display(selected['r2']):.2f}",
+             "help": "כמה מהשונות בניקוד המודל מסביר: 0 כמו ניחוש הבסיס, 1 מושלם."},
+        ]
+    return tiles
+
+
+def insight_sections(text: str | None) -> list[str] | None:
+    """insights.md split at its four fixed headings (each part keeps its heading), or None when
+    the headings do not match, so the app can show the whole text as before."""
+    if not text:
+        return None
+    positions = [text.find(h) for h in INSIGHT_HEADINGS]
+    if any(p < 0 for p in positions) or positions != sorted(positions):
+        return None
+    ends = positions[1:] + [len(text)]
+    return [text[a:b].strip() for a, b in zip(positions, ends)]
+
+
+def section_body(section: str) -> str:
+    """A section without its '## ' heading line."""
+    return section.split("\n", 1)[1].strip() if "\n" in section else ""
+
+
+def subsection(section: str, heading: str) -> str:
+    """The '### heading' part of a section (until the next ### or the end), without the heading."""
+    start = section.find(heading)
+    if start < 0:
+        return ""
+    rest = section[start + len(heading):]
+    nxt = rest.find("\n### ")
+    return (rest if nxt < 0 else rest[:nxt]).strip()
+
+
+def bias_share_percent(section: str) -> int | None:
+    """The top-3 countries share written in the bias line of insights.md ('…ו-74% מגיעים…')."""
+    match = re.search(r"(\d+)% מגיעים משלוש המדינות המובילות", section)
+    return int(match.group(1)) if match else None
+
+
+def price_band_data(eda: dict[str, Any]) -> pd.DataFrame:
+    bands = eda["price_bands"]["bands"]
+    return pd.DataFrame([{"band": b["band"], "geo_mid": b["geo_mid"], "count": int(b["count"]),
+                          "median_points": b["median_points"]} for b in bands])
+
+
+def group_chart_data(rows: list[dict[str, Any]], value_rows: list[dict[str, Any]],
+                     hebrew: bool = False) -> pd.DataFrame:
+    """One row per country or variety: medians and count, and whether it is on the value list."""
+    value_names = {r["name"] for r in value_rows}
+    return pd.DataFrame([{
+        "name": r["name"],
+        "label": COUNTRY_HE.get(r["name"], r["name"]) if hebrew else r["name"],
+        "median_price": r["median_price"], "median_points": r["median_points"],
+        "count": int(r["count"]), "share_pct": r["share_pct"],
+        "group": "שווים" if r["name"] in value_names else "אחרים",
+    } for r in rows])
+
+
+def points_histogram(ranking: pd.DataFrame) -> pd.DataFrame:
+    """Number of wines per whole score, with the WineEnthusiast word (a count, nothing more)."""
+    counts = ranking["points"].round().astype(int).value_counts().sort_index()
+    return pd.DataFrame({"points": counts.index.astype(int), "count": counts.values.astype(int),
+                         "label": [score_label(p) for p in counts.index]})
+
+
+def vintage_data(eda: dict[str, Any]) -> pd.DataFrame:
+    return pd.DataFrame([{"vintage": int(r["vintage"]), "mean_points": r["mean_points"],
+                          "count": int(r["count"])} for r in eda["by_vintage"]])

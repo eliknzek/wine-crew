@@ -32,9 +32,10 @@ def _clear_caches() -> None:
 
 
 # After an update, load the new src/wine_crew code (Streamlit does not reload it itself).
-reload_if_changed(SRC / "wine_crew", clear_caches=_clear_caches)
+reload_if_changed(SRC / "wine_crew", clear_caches=_clear_caches)   # also app/charts.py
 
 from wine_crew import app_data as ad  # noqa: E402
+import charts  # noqa: E402  (app/charts.py: altair charts for the dashboard tabs)
 from wine_crew.config import load_config, resolve_path  # noqa: E402
 
 st.set_page_config(page_title="wine-crew", page_icon="🍷", layout="wide")
@@ -164,6 +165,14 @@ def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs
             config[col] = {**current, "alignment": "right"}
     return st.dataframe(ad.rtl_columns(df), hide_index=True, width="stretch", column_config=config,
                         **kwargs)
+
+
+def kpi_row(tiles: list[dict], key: str) -> None:
+    """A row of KPI tiles (st.metric with a border); 2 per row on narrow screens (style.css)."""
+    with st.container(key=key):
+        for col, tile in zip(st.columns(len(tiles)), tiles):
+            col.metric(tile["label"], tile["value"], delta=tile.get("delta"),
+                       delta_color=tile.get("delta_color", "normal"), help=tile.get("help"), border=True)
 
 
 def wine_cards(wines: pd.DataFrame, key_prefix: str) -> None:
@@ -364,20 +373,93 @@ with predict_tab:
 with learned_tab:
     st.html(BANDS["learned"])
     st.markdown(TAB_INTRO["learned"])
-    if data["insights"]:
-        st.markdown(ad.localize_countries(data["insights"]))
+    eda = data["eda_summary"]
+    if eda is not None:
+        kpi_row(ad.learned_kpis(eda), "kpis_learned")
     else:
+        st.info("הקובץ artifacts/analyst/eda_summary.json לא נמצא, ולכן אין אריחי מדדים, "
+                "והגרפים מוצגים כתמונות.")
+
+    sections = ad.insight_sections(data["insights"])
+    if data["insights"] is None:
         _missing("artifacts/analyst/insights.md")
-    st.divider()
-    st.subheader("גרפים", help=f"חציון: {ad.GLOSSARY['חציון']}")
-    charts = ad.chart_paths(config)
-    if not charts:
-        _missing("artifacts/analyst/charts/")
-    names = list(charts)
-    for i in range(0, len(names), 2):
-        cols = st.columns(2)
-        for col, name in zip(cols, names[i:i + 2]):
-            col.image(str(charts[name]), caption=ad.CHART_TITLES_HE[name], width="stretch")
+    elif sections is None:   # headings changed: show the whole text as before
+        st.markdown(ad.localize_countries(data["insights"]))
+    pngs = ad.chart_paths(config)
+
+    def chart_card(key: str, title: str, chart, png: str, text: str | None = None,
+                   beside: bool = False) -> None:
+        """A card with an interactive chart (or the PNG when the artifacts have no data for it,
+        or a message when neither exists) and, if given, the finding it supports."""
+        with st.container(border=True, key=f"chart_{key}"):
+            st.markdown(f'<div class="card-title">{html.escape(title)}</div>', unsafe_allow_html=True)
+            graph_col, text_col = st.columns([3, 2]) if (beside and text) else (st.container(), None)
+            with graph_col:
+                if chart is not None:
+                    st.altair_chart(chart, width="stretch", key=f"altair_{key}")
+                elif png in pngs:
+                    st.image(str(pngs[png]), caption=ad.CHART_TITLES_HE[png], width="stretch")
+                else:
+                    st.info("אין נתונים לגרף הזה בתוצרים.")
+            if text:
+                with (text_col or st.container()):
+                    st.markdown(ad.localize_countries(text))
+
+    s1, s2, s3, s4 = sections or ("", "", "", "")
+    st.subheader("הממצאים והגרפים", help=f"חציון: {ad.GLOSSARY['חציון']}")
+    # 1. price and the plateau
+    chart_card("price_curve", s1.split("\n", 1)[0].removeprefix("## ") or "ניקוד לפי מחיר",
+               charts.price_curve(ad.price_band_data(eda), eda["price_bands"]["plateau_from_price"])
+               if eda else None, "points_vs_log_price", ad.section_body(s1) or None, beside=True)
+    # 2. value countries and varieties
+    if s2:
+        st.markdown(f'<div class="section-title">{html.escape(s2.split(chr(10), 1)[0].removeprefix("## "))}</div>',
+                    unsafe_allow_html=True)
+        st.markdown(ad.section_body(s2).split("\n###", 1)[0])
+    with st.container(key="dash_row_value"):
+        c1, c2 = st.columns(2)
+        with c1:
+            chart_card("countries", "מדינות: מחיר חציוני מול ניקוד חציוני",
+                       charts.value_scatter(ad.group_chart_data(eda["by_country"], eda["value_countries"], True),
+                                            eda["overall_median_price"], eda["overall_median_points"], "country")
+                       if eda else None, "by_country", ad.subsection(s2, "### מדינות") or None)
+        with c2:
+            chart_card("varieties", "זנים: מחיר חציוני מול ניקוד חציוני",
+                       charts.value_scatter(ad.group_chart_data(eda["by_variety"], eda["value_varieties"]),
+                                            eda["overall_median_price"], eda["overall_median_points"], "variety")
+                       if eda else None, "by_variety", ad.subsection(s2, "### זנים") or None)
+    # 3. bias and missing values
+    bias_lines = [line for line in ad.section_body(s3).splitlines() if line.strip()]
+    missing_text = "\n".join(line for line in bias_lines if "ערכים חסרים" in line)
+    bias_text = "\n".join(line for line in bias_lines if "ערכים חסרים" not in line)
+    if s3:
+        st.markdown(f'<div class="section-title">{html.escape(s3.split(chr(10), 1)[0].removeprefix("## "))}</div>',
+                    unsafe_allow_html=True)
+    with st.container(key="dash_row_bias"):
+        c1, c2 = st.columns(2)
+        with c1:
+            chart_card("share", "חלק היינות לפי מדינה",
+                       charts.share_bars(ad.group_chart_data(eda["by_country"], [], True)) if eda else None,
+                       "", bias_text or None)   # by_country.png is already in the countries card
+        with c2:
+            chart_card("missing", "ערכים חסרים לפי עמודה", None, "missing_values", missing_text or None)
+    # 4. distributions
+    with st.container(key="dash_row_dist"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            chart_card("points_hist", "התפלגות הניקוד",
+                       charts.points_hist(ad.points_histogram(ranking)) if ranking is not None else None,
+                       "points_distribution")
+        with c2:
+            chart_card("price_bars", "התפלגות המחיר",
+                       charts.price_bars(ad.price_band_data(eda)) if eda else None, "price_distribution_log")
+        with c3:
+            chart_card("vintage", "ניקוד ממוצע לפי בציר",
+                       charts.vintage_line(ad.vintage_data(eda)) if eda else None, "points_by_vintage")
+    # 5. recommendations
+    if s4:
+        with st.container(border=True, key="card_recommendations"):
+            st.markdown(ad.localize_countries(s4))
     report = resolve_path(config, "eda_report")
     if report.exists():
         st.download_button("הורדת דוח ה-EDA המלא (HTML)", report.read_bytes(),
@@ -390,84 +472,102 @@ with how_tab:
     if summary is None:
         _missing("artifacts/run_summary.json")
     else:
-        st.subheader("איך ה-Flow רץ")
-        st.markdown(ad.flow_line(ad.flow_steps(summary)))
-        st.caption("שער 2 נבדק גם בתוך Crew 2, לפני האימון (guardrail של משימת ה-features), "
-                   "ושוב כשער של ה-Flow אחרי ש-Crew 2 מסיים.")
-        crew_cols = st.columns(2)
-        for col, (crew, title) in zip(crew_cols, CREW_TITLES.items()):
-            with col:
-                st.markdown(f"**{title}**")
-                requests = summary.get("crews", {}).get(crew, {}).get("requests")
-                st.markdown("\n".join(f"- **{role}**: {ad.AGENT_HE.get(key, '')}"
-                                      for key, role in ad.agent_roles(crew)))
-                if requests is not None:
-                    st.caption(f"{requests} בקשות למודל השפה בריצה האחרונה")
+        kpi_row(ad.how_kpis(summary, metrics), "kpis_how")
+        with st.container(border=True, key="card_flow"):
+            st.subheader("איך ה-Flow רץ")
+            st.markdown(ad.flow_line(ad.flow_steps(summary)))
+            st.caption("שער 2 נבדק גם בתוך Crew 2, לפני האימון (guardrail של משימת ה-features), "
+                       "ושוב כשער של ה-Flow אחרי ש-Crew 2 מסיים.")
+            crew_cols = st.columns(2)
+            for col, (crew, title) in zip(crew_cols, CREW_TITLES.items()):
+                with col:
+                    st.markdown(f"**{title}**")
+                    requests = summary.get("crews", {}).get(crew, {}).get("requests")
+                    st.markdown("\n".join(f"- **{role}**: {ad.AGENT_HE.get(key, '')}"
+                                          for key, role in ad.agent_roles(crew)))
+                    if requests is not None:
+                        st.caption(f"{requests} בקשות למודל השפה בריצה האחרונה")
 
-        st.subheader("הריצה האחרונה")
-        passed = summary["status"] == "passed"
-        (st.success if passed else st.error)(
-            f"סטטוס הריצה האחרונה: **{summary['status']}**"
-            + ("" if passed else f" (נעצרה בבדיקה {summary.get('failed_check')}: {summary.get('error')})"))
-        st.markdown(f"**מזהה ריצה:** `{summary['run_id']}`")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("תאריך (UTC)", summary["started_at"][:16].replace("T", " "))
-        c2.metric("משך", f"{summary['seconds']:.0f} שניות")
-        c3.metric("עלות LLM", f"${summary['total_cost_usd']:.4f}")
-        tokens = summary.get("tokens")
-        if tokens:   # counted from OpenAI's per-call usage (runs before this field: not shown)
-            st.caption(ad.tokens_text(tokens))
+        # The checks table needs the full width for its sentences.
+        with st.container(border=True, key="card_checks"):
+            st.subheader("בדיקות")
+            checks = pd.DataFrame([
+                {"בדיקה": CHECK_NAMES.get(name, name), "עבר": "✅" if c["passed"] else "❌",
+                 "פרטים": ad.check_sentence(name, c, summary, data["contract"])}
+                for name, c in summary["checks"].items()
+            ])
+            show_table_rtl(checks)
+            with st.expander("פרטים טכניים"):
+                for name, c in summary["checks"].items():
+                    st.markdown(f"**{CHECK_NAMES.get(name, name)}**")
+                    details = ad.check_details(c["message"])
+                    if details is not None:
+                        st.json(details, expanded=True)
+                    else:
+                        st.code(c["message"], language=None)
 
-        st.subheader("בדיקות")
-        checks = pd.DataFrame([
-            {"בדיקה": CHECK_NAMES.get(name, name), "עבר": "✅" if c["passed"] else "❌",
-             "פרטים": ad.check_sentence(name, c, summary, data["contract"])}
-            for name, c in summary["checks"].items()
-        ])
-        show_table_rtl(checks)
-        with st.expander("פרטים טכניים"):
-            for name, c in summary["checks"].items():
-                st.markdown(f"**{CHECK_NAMES.get(name, name)}**")
-                details = ad.check_details(c["message"])
-                if details is not None:
-                    st.json(details, expanded=True)
-                else:
-                    st.code(c["message"], language=None)
+    def run_card() -> None:
+        with st.container(border=True, key="card_run"):
+            st.subheader("הריצה האחרונה")
+            passed = summary["status"] == "passed"
+            (st.success if passed else st.error)(
+                f"סטטוס הריצה האחרונה: **{summary['status']}**"
+                + ("" if passed else f" (נעצרה בבדיקה {summary.get('failed_check')}: {summary.get('error')})"))
+            st.markdown(f"**מזהה ריצה:** `{summary['run_id']}`")
+            st.metric("תאריך (UTC)", summary["started_at"][:16].replace("T", " "))
+            tokens = summary.get("tokens")
+            if tokens:   # counted from OpenAI's per-call usage (runs before this field: not shown)
+                st.caption(ad.tokens_text(tokens))
+            st.markdown('<div class="card-title">שורות</div>', unsafe_allow_html=True)
+            rows = summary.get("rows", {})
+            labels = {"raw": "בקובץ הגולמי", "clean": "אחרי ניקוי", "features": "ב-features",
+                      "train": "אימון", "test": "בדיקה"}
+            items = list(labels.items())
+            for chunk in (items[:3], items[3:]):
+                for col, (key, label) in zip(st.columns(3), chunk):
+                    col.metric(label, f"{rows[key]:,}" if key in rows else "—")
+            st.caption(f"sha256 של הקובץ הגולמי: `{summary.get('raw_sha256')}`")
 
-        st.subheader("שורות")
-        rows = summary.get("rows", {})
-        labels = {"raw": "בקובץ הגולמי", "clean": "אחרי ניקוי", "features": "ב-features",
-                  "train": "אימון", "test": "בדיקה"}
-        cols = st.columns(len(labels))
-        for col, (key, label) in zip(cols, labels.items()):
-            col.metric(label, f"{rows[key]:,}" if key in rows else "—")
-        st.caption(f"sha256 של הקובץ הגולמי: `{summary.get('raw_sha256')}`")
+    def models_card() -> None:
+        with st.container(border=True, key="card_models"):
+            st.subheader("השוואת מודלים", help=f"MAE: {ad.GLOSSARY['MAE']}")
+            st.markdown(f"{ad.accuracy_sentence(metrics)} (MAE של המודל שנבחר בקבוצת הבדיקה).")
+            table = pd.DataFrame([
+                {"מודל": name + (" (נבחר)" if name == metrics["selected"] else ""),
+                 "CV MAE": ad.round_for_display(m["cv"]["mae"]),
+                 "MAE (test)": ad.round_for_display(m["test"]["mae"]),
+                 "RMSE (test)": ad.round_for_display(m["test"]["rmse"]),
+                 "R² (test)": ad.round_for_display(m["test"]["r2"])}
+                for name, m in metrics["models"].items()
+            ])
+            mae_help = ad.GLOSSARY["MAE"]
+            show_table_rtl(table, column_config={
+                col: st.column_config.NumberColumn(col, format="%.2f",
+                                                   help=mae_help if "MAE" in col else None)
+                for col in ("CV MAE", "MAE (test)", "RMSE (test)", "R² (test)")})
+            st.caption("MAE הוא השגיאה הממוצעת בנקודות ניקוד. המודל נבחר לפי MAE ממוצע ב-CV, "
+                       "וקבוצת הבדיקה משמשת רק לדיווח.")
 
+    # Run card and model comparison side by side (each alone when the other file is missing).
     if metrics is None:
         _missing("artifacts/scientist/metrics.json")
-    else:
-        st.subheader("השוואת מודלים", help=f"MAE: {ad.GLOSSARY['MAE']}")
-        st.markdown(f"{ad.accuracy_sentence(metrics)} (MAE של המודל שנבחר בקבוצת הבדיקה).")
-        table = pd.DataFrame([
-            {"מודל": name + (" (נבחר)" if name == metrics["selected"] else ""),
-             "CV MAE": ad.round_for_display(m["cv"]["mae"]),
-             "MAE (test)": ad.round_for_display(m["test"]["mae"]),
-             "RMSE (test)": ad.round_for_display(m["test"]["rmse"]),
-             "R² (test)": ad.round_for_display(m["test"]["r2"])}
-            for name, m in metrics["models"].items()
-        ])
-        mae_help = ad.GLOSSARY["MAE"]
-        show_table_rtl(table, column_config={
-            col: st.column_config.NumberColumn(col, format="%.2f",
-                                               help=mae_help if "MAE" in col else None)
-            for col in ("CV MAE", "MAE (test)", "RMSE (test)", "R² (test)")})
-        st.caption("MAE הוא השגיאה הממוצעת בנקודות ניקוד. המודל נבחר לפי MAE ממוצע ב-CV, "
-                   "וקבוצת הבדיקה משמשת רק לדיווח.")
-    if data["model_card"]:
-        st.divider()
-        st.markdown(data["model_card"])
-    if data["evaluation_report"]:
-        with st.expander("דוח ההערכה המלא (evaluation_report.md)"):
-            st.markdown(data["evaluation_report"])
+    if summary is not None and metrics is not None:
+        with st.container(key="dash_row_run"):
+            left, right = st.columns(2)
+            with left:
+                run_card()
+            with right:
+                models_card()
+    elif summary is not None:
+        run_card()
+    elif metrics is not None:
+        models_card()
+    if data["model_card"] or data["evaluation_report"]:
+        with st.container(border=True, key="card_model_card"):
+            if data["model_card"]:
+                st.markdown(data["model_card"])
+            if data["evaluation_report"]:
+                with st.expander("דוח ההערכה המלא (evaluation_report.md)"):
+                    st.markdown(data["evaluation_report"])
 
 st.html(FOOTER)

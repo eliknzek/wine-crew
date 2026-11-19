@@ -172,7 +172,7 @@ def test_new_artifacts_load_without_clearing_the_cache(tmp_path, monkeypatch):
     import code_reload
 
     # Record the current code fingerprint so the app does not evict our patched module.
-    setattr(sys, code_reload._STATE_ATTR, code_reload.code_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    setattr(sys, code_reload._STATE_ATTR, code_reload.current_fingerprint(REPO_ROOT / "src" / "wine_crew"))
     art = tmp_path / "artifacts"
     shutil.copytree(REPO_ROOT / "artifacts", art)
     config = load_config()
@@ -224,7 +224,10 @@ def test_every_former_item_is_still_shown(app):
     assert any(e.label.startswith("דוח ההערכה המלא") for e in how.expander)
     # was "ניתוח"
     assert any("ניקוד חציוני" in m.value for m in learned.markdown)
-    assert len(learned.get("image")) == len(ad.chart_paths(CONFIG)) == 7
+    # The 7 EDA charts: each has an interactive version (by_country feeds two: the value scatter and
+    # the share bars), except missing_values, which has no data in the artifacts and stays a PNG.
+    assert len(ad.chart_paths(CONFIG)) == 7
+    assert len(learned.get("vega_lite_chart")) == 7 and len(learned.get("image")) == 1
     assert len(learned.get("download_button")) == 1
     # was "מציאת שווים למחיר"
     assert any("value_score" in d.value.columns for d in find.dataframe)
@@ -471,3 +474,120 @@ def test_no_results_state(app):
     assert len(block) == 1 and "לא נמצאו יינות" in block[0] and "no-results-img" in block[0]
     assert not any("value_score" in d.value.columns for d in find.dataframe)   # no empty table
     assert not find.get("download_button")
+
+
+CHART_CARDS = {"price_curve": "vega", "countries": "vega", "varieties": "vega", "share": "vega",
+               "missing": "image", "points_hist": "vega", "price_bars": "vega", "vintage": "vega"}
+
+
+def _keyed(app, tab_label, key):
+    found = []
+
+    def walk(node):
+        for child in getattr(node, "children", {}).values():
+            if (getattr(getattr(child, "proto", None), "id", "") or "").endswith(key):
+                found.append(child)
+            walk(child)
+
+    walk(_tab(app, tab_label))
+    return found[0] if found else None
+
+
+def _all(node, kind):
+    out = []
+
+    def walk(n):
+        for child in getattr(n, "children", {}).values():
+            if getattr(child, "type", None) == kind:
+                out.append(child)
+            walk(child)
+
+    walk(node)
+    return out
+
+
+def test_learned_kpi_tiles_come_from_eda_summary(app):
+    eda = ad.load_all(CONFIG)["eda_summary"]
+    tiles = _keyed(app, "מה למדנו", "kpis_learned")
+    assert [(m.label, m.value) for m in _all(tiles, "metric")] == \
+        [(t["label"], t["value"]) for t in ad.learned_kpis(eda)]
+    values = [m.value for m in _all(tiles, "metric")]
+    assert values[0] == f"{eda['row_count']:,}" and values[1] == ad.money(eda["overall_median_price"])
+
+
+def test_top3_share_tile_matches_insights(app):
+    """One fact, one number: the tile shows the same whole percent as the bias line of insights.md."""
+    data = ad.load_all(CONFIG)
+    written = ad.bias_share_percent(ad.insight_sections(data["insights"])[2])
+    tiles = _keyed(app, "מה למדנו", "kpis_learned")
+    share = next(m.value for m in _all(tiles, "metric") if m.label.startswith("שלוש המדינות"))
+    assert written is not None and share == f"{written}%"
+
+
+def test_how_kpi_tiles(app):
+    data = ad.load_all(CONFIG)
+    tiles = _keyed(app, "איך זה עובד", "kpis_how")
+    metrics = _all(tiles, "metric")
+    expected = ad.how_kpis(data["summary"], data["metrics"])
+    assert [(m.label, m.value) for m in metrics] == [(t["label"], t["value"]) for t in expected]
+    assert len(metrics) == 6
+
+
+def test_each_chart_card_has_one_chart(app):
+    for key, kind in CHART_CARDS.items():
+        card = _keyed(app, "מה למדנו", f"chart_{key}")
+        assert card is not None, key
+        vega, images = _all(card, "vega_lite_chart"), _all(card, "image")
+        assert (len(vega), len(images)) == ((1, 0) if kind == "vega" else (0, 1)), key
+
+
+def test_every_insight_is_still_shown(app):
+    text = " ".join(m.value for m in _all(_tab(app, "מה למדנו"), "markdown"))
+    for section in ad.insight_sections(ad.load_all(CONFIG)["insights"]):
+        for line in section.splitlines():
+            line = line.strip().lstrip("-# ").strip()
+            if line:
+                assert ad.localize_countries(line) in text, line
+
+
+def _artifacts_copy(tmp_path, monkeypatch, drop=()):
+    import shutil
+    import sys
+
+    import wine_crew.config as cfg_module
+
+    sys.path.insert(0, str(REPO_ROOT / "app"))
+    import code_reload
+
+    setattr(sys, code_reload._STATE_ATTR, code_reload.current_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    art = tmp_path / "artifacts"
+    shutil.copytree(REPO_ROOT / "artifacts", art)
+    for rel in drop:
+        (art / rel).unlink()
+    config = load_config()
+    config["paths"] = {**config["paths"],
+                       **{k: str(art / v.removeprefix("artifacts/")) for k, v in config["paths"].items()
+                          if isinstance(v, str) and v.startswith("artifacts/")},
+                       "artifacts_analyst": str(art / "analyst"), "artifacts_scientist": str(art / "scientist")}
+    monkeypatch.setattr(cfg_module, "load_config", lambda path=None: config)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+def test_charts_fall_back_to_png_without_eda_summary(tmp_path, monkeypatch):
+    at = _artifacts_copy(tmp_path, monkeypatch, drop=["analyst/eda_summary.json"])
+    learned = _tab(at, "מה למדנו")
+    assert any("eda_summary.json לא נמצא" in i.value for i in learned.info)
+    assert _keyed(at, "מה למדנו", "kpis_learned") is None
+    # every eda_summary chart is now its PNG; the score histogram still comes from value_ranking.csv
+    assert len(learned.get("image")) == 6 and len(learned.get("vega_lite_chart")) == 1
+
+
+def test_missing_files_show_messages_not_errors(tmp_path, monkeypatch):
+    at = _artifacts_copy(tmp_path, monkeypatch, drop=["run_summary.json", "scientist/metrics.json"])
+    how = _tab(at, "איך זה עובד")
+    assert _keyed(at, "איך זה עובד", "kpis_how") is None
+    assert len(how.warning) >= 2

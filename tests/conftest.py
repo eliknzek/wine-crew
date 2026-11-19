@@ -120,5 +120,5 @@ def _keep_wine_crew_loaded():
     sys.path.insert(0, str(REPO_ROOT / "app"))
     import code_reload
 
-    setattr(sys, code_reload._STATE_ATTR, code_reload.code_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    setattr(sys, code_reload._STATE_ATTR, code_reload.current_fingerprint(REPO_ROOT / "src" / "wine_crew"))
     yield

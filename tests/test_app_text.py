@@ -332,3 +332,64 @@ def test_hero_overlay_is_just_dark_enough_for_white_text():
     assert brightest == (255, 255, 255) and lowest == 0.60
     assert contrast_ratio("#FFFFFF", _overlay_on(brightest, rgb, alpha)) >= 4.5
     assert lowest < alpha <= lowest + 0.05
+
+
+
+# --------------------------------------------------------------------------- dashboard
+
+def _eda():
+    return {"row_count": 111537, "overall_median_price": 25.0, "overall_median_points": 88.0,
+            "by_country": [{"name": "US", "count": 50, "share_pct": 45.04},
+                           {"name": "Italy", "count": 15, "share_pct": 13.9},
+                           {"name": "France", "count": 16, "share_pct": 14.6},
+                           {"name": "Spain", "count": 6, "share_pct": 5.42}]}
+
+
+def test_learned_kpis_format_and_units():
+    tiles = ad.learned_kpis(_eda())
+    assert [t["value"] for t in tiles] == ["111,537", "$25", "88", "74%"]   # 73.54 -> whole 74
+    assert all(t["label"] for t in tiles)
+    assert "\u206680\u2060–\u2060100\u2069" in tiles[2]["label"]   # range kept LTR and unbroken in RTL text
+    assert ad.top_countries_share(_eda()) == 74 and ad.whole_percent(73.5) == 74 and ad.whole_percent(73.49) == 73
+
+
+def test_how_kpis():
+    summary = {"status": "passed", "seconds": 61.4, "total_cost_usd": 0.003446, "tokens": {"requests": 1234}}
+    metrics = {"selected": "v2", "models": {"v2": {"test": {"mae": 1.6895, "r2": 0.5184}},
+                                            "baseline": {"test": {"mae": 2.538, "r2": -0.0001}}}}
+    tiles = ad.how_kpis(summary, metrics)
+    assert [t["value"] for t in tiles] == ["עברה ✅", "61 שניות", "$0.0034", "1,234", "1.69", "0.52"]
+    assert tiles[4]["delta"] == "-0.85 מהבסיס" and tiles[4]["delta_color"] == "inverse"
+    assert len(ad.how_kpis({**summary, "status": "failed"}, None)) == 4
+    assert ad.how_kpis({**summary, "status": "failed"}, None)[0]["value"] == "נכשלה ❌"
+
+
+def test_insight_sections():
+    text = "\n".join(f"{h}\n- line {i}" for i, h in enumerate(ad.INSIGHT_HEADINGS))
+    sections = ad.insight_sections(text)
+    assert len(sections) == 4 and sections[2] == f"{ad.INSIGHT_HEADINGS[2]}\n- line 2"
+    assert ad.section_body(sections[0]) == "- line 0"
+    assert ad.insight_sections("## something else\n- x") is None and ad.insight_sections(None) is None
+    assert ad.subsection("## h\nintro\n### מדינות\n- a\n### זנים\n- b", "### מדינות") == "- a"
+    assert ad.bias_share_percent("- 45% מ-US, ו-74% מגיעים משלוש המדינות המובילות: US") == 74
+
+
+def test_chart_data():
+    groups = ad.group_chart_data([{"name": "Israel", "count": 5, "share_pct": 1.0, "median_points": 89,
+                                   "median_price": 25}, {"name": "US", "count": 9, "share_pct": 2.0,
+                                                         "median_points": 88, "median_price": 30}],
+                                 [{"name": "Israel"}], hebrew=True)
+    assert list(groups["group"]) == ["שווים", "אחרים"] and list(groups["label"]) == ["ישראל", "ארצות הברית"]
+    hist = ad.points_histogram(pd.DataFrame({"points": [88, 88, 90, 97]}))
+    assert list(hist["count"]) == [2, 1, 1] and list(hist["label"]) == ["טוב מאוד", "מצוין", "יוצא דופן"]
+
+
+def test_chart_series_colors_have_3_to_1_contrast():
+    """Graphical objects need 3:1 against what is behind them: the cream page and white cards.
+    Gold is used only for reference lines, never a data series."""
+    theme = _theme()
+    series = [ad.CHART_COLORS["main"], ad.CHART_COLORS["other"], *ad.SCORE_COLORS.values()]
+    for color in series:
+        assert contrast_ratio(color, theme["backgroundColor"]) >= 3, color
+        assert contrast_ratio(color, "#FFFFFF") >= 3, color
+    assert contrast_ratio(ad.CHART_COLORS["reference"], theme["backgroundColor"]) < 3   # decoration only

@@ -28,6 +28,10 @@
 [data-testid="stHeading"], [data-testid="stHeading"] h1, [data-testid="stHeading"] h2,
 [data-testid="stHeading"] h3, [data-testid="stCaptionContainer"] { direction: rtl; text-align: right; }
 [data-testid="stDataFrame"], [data-testid="stTable"], code, pre { direction: ltr; text-align: left; }
+/* Charts draw their own text in SVG: with an inherited direction: rtl the text anchors flip and
+   axis labels and legends land inside the plot. Keep the chart itself LTR (Hebrew strings still
+   read right to left). */
+[data-testid="stVegaLiteChart"] { direction: ltr; }
 /* Dropdown lists open in a popover outside the widget, so target the dropdown itself. */
 [data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] { direction: rtl; }
 [data-testid="stSelectboxVirtualDropdown"] [role="option"],
@@ -200,6 +204,37 @@
   background: url("app/static/glass-vineyard-portrait.webp") center / cover no-repeat;
 }
 
+/* ---- Dashboard: KPI tiles and chart cards ("מה למדנו", "איך זה עובד") -------------------- */
+[class*="st-key-kpis_"] { margin: 0.5rem 0 1.25rem; }
+[class*="st-key-kpis_"] [data-testid="stMetric"] {
+  background: var(--wine-card); border-top: 2px solid var(--wine-gold);
+}
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"] p { font-size: 0.9rem; color: #4A403A; }   /* 9:1 */
+/* Labels wrap instead of being cut with "…" (Streamlit keeps them on one line). */
+[class*="st-key-kpis_"] [data-testid="stMetricLabel"], [class*="st-key-kpis_"] [data-testid="stMetricLabel"] * {
+  white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+  height: auto !important; line-height: 1.35;
+}
+[class*="st-key-kpis_"] [data-testid="stMetricValue"] {
+  color: var(--wine-red); font-family: "Frank Ruhl Libre", serif; font-weight: 700;
+}
+[class*="st-key-chart_"], [class*="st-key-card_"] {
+  background: var(--wine-card); border-top: 2px solid var(--wine-gold) !important;
+}
+.card-title {
+  font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.15rem;
+  color: var(--wine-red); margin-bottom: 0.25rem;
+}
+.section-title {
+  font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.45rem;
+  color: var(--wine-red); margin: 1.25rem 0 0.25rem;
+}
+.st-key-card_recommendations { border: 1px solid var(--wine-gold) !important; }
+/* Cards in one dashboard row get equal height (same chain as the wine cards above). */
+[class*="st-key-dash_row_"] [data-testid="stColumn"] > [data-testid="stVerticalBlock"] { height: 100%; }
+[class*="st-key-dash_row_"] [data-testid="stColumn"] [data-testid="stLayoutWrapper"] { flex: 1 1 auto; }
+[class*="st-key-dash_row_"] [class*="st-key-chart_"], [class*="st-key-dash_row_"] [class*="st-key-card_"] { height: 100%; }
+
 /* ---- Footer ---------------------------------------------------------------------------- */
 .wine-footer {
   margin-top: 3rem; padding: 1.25rem 0 0.5rem; border-top: 1px solid var(--wine-gold);
@@ -229,6 +264,16 @@
   .st-key-hero { padding: 3rem var(--page-pad) 2.25rem; }
   .st-key-hero .stMarkdown p { font-size: 0.95rem; }
   [data-testid="stMetricValue"] { font-size: 1.4rem; }
+  /* KPI tiles: 2 per row (Streamlit would stack every column on its own row). */
+  [class*="st-key-kpis_"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.75rem; }
+  [class*="st-key-kpis_"] [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 0.75rem) !important; min-width: calc(50% - 0.75rem) !important;
+    width: calc(50% - 0.75rem) !important;
+  }
+  /* Dashboard cards stacked: natural height. */
+  [class*="st-key-dash_row_"] [data-testid="stColumn"] > [data-testid="stVerticalBlock"] { height: auto; }
+  [class*="st-key-dash_row_"] [data-testid="stColumn"] [data-testid="stLayoutWrapper"] { flex: none; }
+  [class*="st-key-dash_row_"] [class*="st-key-chart_"], [class*="st-key-dash_row_"] [class*="st-key-card_"] { height: auto; }
   /* Decorative photos smaller on phones */
   .tab-band { height: 64px; margin-bottom: 0.75rem; }
   .no-results { flex-direction: column; align-items: stretch; text-align: right; gap: 0.75rem; }
