@@ -260,7 +260,9 @@ with value_tab:
                 column_config={
                     "rank": "דירוג כללי", "title": st.column_config.TextColumn("יין", help=TITLE_HELP),
                     "country": "מדינה", "province": "מחוז",
-                    "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),
+                    # 150px: auto width cut long names such as "Cabernet Sauvignon" inside 1200px
+                    "variety": st.column_config.TextColumn("זן", width=150),
+                    "vintage": st.column_config.TextColumn("בציר"),
                     "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
                     "points": "ניקוד", "label": "דרגה",
                     "predicted": st.column_config.NumberColumn("ניקוד צפוי", format="%.1f",
