@@ -91,7 +91,7 @@ def test_value_filter(app):
 
 
 def test_missing_vintage_shown_empty(app):
-    app.slider(key="value_top").set_value(200).run()
+    app.number_input(key="value_top").set_value(200).run()   # a number field since the filter bar round
     app.multiselect(key="value_countries").select("France").run()
     table = next(d for d in app.dataframe if "value_score" in d.value.columns)
     vintages = table.value["vintage"]
@@ -235,7 +235,9 @@ def test_every_former_item_is_still_shown(app):
     assert any("value_score" in d.value.columns for d in find.dataframe)
     keys = {w.key for kind in ("number_input", "multiselect", "slider") for w in find.get(kind)}
     assert keys == {"value_price_max", "value_price_min", "value_countries", "value_varieties", "value_top"}
-    more = next(e for e in find.expander if e.label == "סינון נוסף")
+    # "סינון נוסף" is now a popover in the filter bar (was an expander); same two widgets inside
+    more = _keyed(app, "מצא יין שווה", "value_more")
+    assert more is not None and getattr(more, "type", None) == "popover"
     assert {w.key for kind in ("number_input", "slider") for w in more.get(kind)} == \
         {"value_price_min", "value_top"}
     # was "חיזוי"
@@ -632,3 +634,16 @@ def test_checks_table_shows_status_icons(app):
 def test_status_tile_has_its_icon_container(app):
     tile = _keyed(app, "איך זה עובד", "kpi_status_passed")
     assert tile is not None and _all(tile, "metric")[0].value == "עברה"
+
+
+def test_filters_sit_in_one_bar(app):
+    """Budget, country, variety and the "סינון נוסף" popover share one row inside one card."""
+    bar = _keyed(app, "מצא יין שווה", "card_filters")
+    assert bar is not None
+    row = next(c for c in bar.children.values() if getattr(c, "type", None) == "flex_container")
+    columns = list(row.children.values())
+    assert len(columns) == 4
+    assert [w.key for w in columns[0].get("number_input")] == ["value_price_max"]
+    assert [w.key for w in columns[1].get("multiselect")] == ["value_countries"]
+    assert [w.key for w in columns[2].get("multiselect")] == ["value_varieties"]
+    assert _keyed(app, "מצא יין שווה", "value_more") is not None

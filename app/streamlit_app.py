@@ -233,20 +233,24 @@ with value_tab:
     else:
         lo, hi = ad.price_range(data["contract"])
         file_max = min(hi, float(ranking["price"].max()))
-        price_max = st.number_input("תקציב: מחיר מקסימלי לבקבוק ($)", lo, hi, file_max, step=1.0,
-                                    key="value_price_max")
         countries = ad.sort_countries(ranking["country"].dropna().unique().tolist())
         varieties = sorted(ranking["variety"].dropna().unique().tolist())
-        f1, f2 = st.columns(2)
-        chosen_countries = f1.multiselect("מדינה", countries, key="value_countries",
-                                          format_func=ad.country_label,
-                                          placeholder="כל המדינות (אפשר לבחור כמה)")
-        chosen_varieties = f2.multiselect("זן", varieties, key="value_varieties",
-                                          placeholder="כל הזנים (אפשר לבחור כמה)")
-        with st.expander("סינון נוסף"):
-            p1, p2 = st.columns(2)
-            price_min = p1.number_input("מחיר מינימלי ($)", lo, hi, lo, step=1.0, key="value_price_min")
-            top = p2.slider("מספר יינות", 10, 200, 50, step=10, key="value_top")
+        # One filter bar in a card: budget (narrow), country, variety, and "סינון נוסף" as a popover
+        # (it opens over the page instead of pushing it down). Same keys, defaults and filtering.
+        with st.container(border=True, key="card_filters"):
+            c_budget, c_country, c_variety, c_more = st.columns([1, 2, 2, 1], vertical_alignment="bottom")
+            price_max = c_budget.number_input("תקציב ($)", lo, hi, file_max, step=1.0, key="value_price_max",
+                                              help="המחיר המקסימלי לבקבוק.")
+            chosen_countries = c_country.multiselect("מדינה", countries, key="value_countries",
+                                                     format_func=ad.country_label, placeholder="כל המדינות",
+                                                     help="אפשר לבחור כמה מדינות.")
+            chosen_varieties = c_variety.multiselect("זן", varieties, key="value_varieties",
+                                                     placeholder="כל הזנים", help="אפשר לבחור כמה זנים.")
+            with c_more.popover("סינון נוסף", width="stretch", key="value_more"):
+                price_min = st.number_input("מחיר מינימלי ($)", lo, hi, lo, step=1.0, key="value_price_min")
+                # A number field, not a slider: Streamlit's slider cannot fill right to left
+                # without breaking dragging. Same key, range, default and step as before.
+                top = int(st.number_input("מספר יינות", 10, 200, 50, step=10, key="value_top"))
         result = ad.filter_ranking(ranking, chosen_countries, chosen_varieties, price_min, price_max, top)
         st.markdown("ציון שווי = הניקוד בפועל פחות הניקוד שהמודל צפה ליין כזה (מחיר, מקור, זן ובציר). "
                     "התחזית לכל יין מגיעה ממודל שלא ראה אותו באימון (out-of-fold).",

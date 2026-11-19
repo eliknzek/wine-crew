@@ -78,3 +78,22 @@ def test_static_images_are_small_webp_files_all_used_by_the_css():
     used = set(re.findall(r'url\("app/static/([^"]+)"\)', css))
     assert used == set(files)                  # no orphan files, no broken links
     assert "base64" not in css
+
+
+def test_every_asset_is_used():
+    """Every file in app/assets/ is used: an SVG through its {{SVG:name}} placeholder in style.css,
+    other files by name in streamlit_app.py (e.g. the favicon); and every placeholder has its file."""
+    import re
+
+    assets = REPO_ROOT / "app" / "assets"
+    css = (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")
+    app_source = (REPO_ROOT / "app" / "streamlit_app.py").read_text(encoding="utf-8")
+    placeholders = set(re.findall(r"\{\{SVG:([a-z0-9-]+)\}\}", css))
+    for path in assets.iterdir():
+        if path.name.startswith("."):
+            continue
+        if path.suffix == ".svg":
+            assert path.stem in placeholders, f"{path.name} is not used in style.css"
+        else:
+            assert path.name in app_source, f"{path.name} is not used in streamlit_app.py"
+    assert {p for p in placeholders if not (assets / f"{p}.svg").exists()} == set()
