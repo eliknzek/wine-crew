@@ -371,6 +371,11 @@ def score_label(points: float) -> str:
     return next(label for low, label in SCORE_SCALE if rounded >= low)
 
 
+def score_text(points: float) -> str:
+    """'89: טוב מאוד' (whole number and its word)."""
+    return f"{_clip_points(points)}: {score_label(points)}"
+
+
 def value_sentence(score: float) -> str:
     """value_score in words: how far above (or below) the points expected for such a wine at this price."""
     shown = round(float(score), 1)
@@ -409,7 +414,7 @@ def prediction_range(points: float, band: tuple[float, float]) -> tuple[int, int
 
 def prediction_sentence(points: float, band: tuple[float, float]) -> str:
     low, high = prediction_range(points, band)
-    return (f"{_clip_points(points)}: {score_label(points)}. "
+    return (f"{score_text(points)}. "
             f"ב-8 מתוך 10 יינות דומים, הניקוד האמיתי היה בין {low} ל-{high}.")
 
 
@@ -419,9 +424,9 @@ CREW_DIRS = {"crew1": "analyst", "crew2": "scientist"}
 # Order in which the Flow runs them (flow.py). Training is a task inside Crew 2.
 FLOW_STEPS = [
     ("preflight", "בדיקה מקדימה"),
-    ("crew1", "Crew 1 (Data Analyst)"),
+    ("crew1", "Crew 1"),
     ("contract", "שער 1 (חוזה נתונים)"),
-    ("crew2", "Crew 2 (Data Scientist, כולל אימון)"),
+    ("crew2", "Crew 2 (כולל אימון)"),
     ("features", "שער 2 (features)"),
     ("model", "שער 3 (מודל)"),
 ]

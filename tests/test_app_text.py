@@ -16,6 +16,11 @@ def test_score_label_boundaries(points, label):
     assert ad.score_label(points) == label
 
 
+def test_score_text():
+    assert ad.score_text(88.6) == "89: טוב מאוד"
+    assert ad.score_text(89.5) == "90: מצוין"
+
+
 def test_value_sentence():
     assert ad.value_sentence(9.081) == "9.1 נקודות מעל הניקוד שצפוי ליין כזה במחיר הזה"
     assert ad.value_sentence(-0.42) == "0.4 נקודות מתחת לניקוד שצפוי ליין כזה במחיר הזה"
