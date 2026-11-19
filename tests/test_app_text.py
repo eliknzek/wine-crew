@@ -21,6 +21,10 @@ def test_score_text():
     assert ad.score_text(89.5) == "90: מצוין"
 
 
+def test_signed_keeps_sign_with_number():
+    assert ad.signed(9.081) == "\u2066+9.1\u2069" and ad.signed(-0.42) == "\u2066-0.4\u2069"
+
+
 def test_value_sentence():
     assert ad.value_sentence(9.081) == "9.1 נקודות מעל הניקוד שצפוי ליין כזה במחיר הזה"
     assert ad.value_sentence(-0.42) == "0.4 נקודות מתחת לניקוד שצפוי ליין כזה במחיר הזה"
@@ -96,3 +100,135 @@ def test_agent_roles_come_from_agents_yaml(crew):
     roles = ad.agent_roles(crew)
     assert len(roles) == 4
     assert all(key in ad.AGENT_HE for key, _ in roles)
+
+
+# --------------------------------------------------------------------------- is it worth paying more?
+
+def _ranking(rows):
+    """rows: (country, variety, price, value_score)"""
+    return pd.DataFrame([{"title": f"w{i}", "country": c, "variety": v, "price": float(p), "value_score": s,
+                          "points": 90, "predicted": 89.0, "vintage": 2010, "province": "P", "region_1": None,
+                          "rank": i + 1} for i, (c, v, p, s) in enumerate(rows)])
+
+
+def test_price_band_country_and_variety():
+    ranking = _ranking([("US", "Syrah", p, 0) for p in range(10, 50)] + [("FR", "Syrah", 500, 0)] * 40)
+    low, high, level = ad.price_band(ranking, "US", "Syrah")
+    prices = pd.Series(range(10, 50), dtype=float)
+    assert level == "country_variety" and (low, high) == (prices.quantile(0.05), prices.quantile(0.95))
+
+
+def test_price_band_falls_back_to_variety_then_all():
+    ranking = _ranking([("US", "Syrah", 20, 0)] * 29 + [("FR", "Syrah", 100, 0)] * 10
+                       + [("FR", "Merlot", 7, 0)] * 40)
+    assert ad.price_band(ranking, "US", "Syrah")[2] == "variety"          # 29 US Syrah < 30, 39 Syrah
+    assert ad.price_band(ranking, "IT", "Nebbiolo")[2] == "all"           # no such wines at all
+    small = _ranking([("US", "Syrah", 20, 0)] * 5 + [("FR", "Merlot", 7, 0)] * 40)
+    low, high, level = ad.price_band(small, "US", "Syrah")
+    assert level == "all" and low == 7.0 and high == 20.0
+
+
+def test_rare_price_note():
+    assert ad.is_rare_price(300, (14.0, 52.0, "country_variety"))
+    assert ad.is_rare_price(10, (14.0, 52.0))
+    assert not ad.is_rare_price(30, (14.0, 52.0))
+    assert ad.RARE_PRICE_NOTE == "המחיר שבחרת נדיר ליין כזה בנתונים, ולכן התחזית פחות בטוחה."
+
+
+def test_price_grid():
+    grid = ad.price_grid(25, 17, 75)
+    assert grid[0] == 17 and grid[-1] == 75 and grid == sorted(grid)
+    assert 25.0 in grid and 50.0 in grid
+    ratios = [b / a for a, b in zip(grid, grid[1:]) if a not in (25.0, 50.0) and b not in (25.0, 50.0)]
+    assert max(ratios) / min(ratios) < 1.01                                  # log-spaced
+    out = ad.price_grid(300, 14, 52)
+    assert out[-1] == 300.0 and 600.0 not in out                            # chosen price always included
+
+
+def _curve(points):
+    return pd.DataFrame(points, columns=["price", "predicted"])
+
+
+def test_curve_sentence_doubling():
+    curve = _curve([(10, 85.0), (20, 87.0), (40, 89.4), (80, 91.0)])
+    assert ad.curve_sentence(curve, 20, 80) == "לפי המודל, יין כזה במחיר $40 צפוי לקבל בערך 2.4 נקודות יותר."
+
+
+def test_curve_sentence_flat_from_60():
+    curve = _curve([(15, 85.0), (30, 88.0), (60, 90.0), (90, 90.2), (120, 90.3), (150, 90.4)])
+    assert ad.curve_sentence(curve, 15, 150) == (
+        "לפי המודל, יין כזה במחיר $30 צפוי לקבל בערך 3.0 נקודות יותר. "
+        "לפי המודל, מעל $60 הניקוד הצפוי כמעט לא עולה (פחות מ-0.5 נקודה עד $150).")
+    assert ad.curve_sentence(curve, 60, 150) == \
+        "לפי המודל, מעל $60 הניקוד הצפוי כמעט לא עולה (פחות מ-0.5 נקודה עד $150)."
+
+
+def test_curve_sentence_beyond_band_and_falling():
+    curve = _curve([(20, 88.0), (30, 88.5), (40, 89.0), (52, 89.3)])
+    assert ad.curve_sentence(curve, 30, 52) == \
+        "לפי המודל, יין כזה במחיר $52 (המחיר הגבוה בטווח הנתונים) צפוי לקבל בערך 0.8 נקודות יותר."
+    assert ad.curve_sentence(curve, 300, 52) is None
+    falling = _curve([(10, 88.0), (20, 87.5), (40, 87.0)])                  # falling counts as flat
+    assert ad.curve_sentence(falling, 10, 40).startswith("לפי המודל, מעל $10 הניקוד הצפוי כמעט לא עולה")
+    same_then_up = _curve([(10, 88.0), (20, 88.02), (40, 91.0)])
+    assert ad.curve_sentence(same_then_up, 10, 40) == "לפי המודל, יין כזה במחיר $20 צפוי לקבל ניקוד כמעט זהה."
+
+
+# --------------------------------------------------------------------------- similar wines
+
+def test_similar_wines_same_country_and_variety():
+    ranking = _ranking([("US", "Syrah", 25, s) for s in range(8)] + [("US", "Syrah", 100, 99)])
+    found, levels = ad.similar_wines(ranking, "US", "Syrah", 25)
+    assert levels == ["country_variety"] and list(found["value_score"]) == [7, 6, 5, 4, 3]
+    assert ad.similar_note(levels, "US", "Syrah") is None
+
+
+def test_similar_wines_widen_in_order():
+    ranking = _ranking([("US", "Syrah", 20, 1), ("US", "Syrah", 30, 2),     # level 1
+                        ("FR", "Syrah", 25, 9),                               # level 2
+                        ("US", "Merlot", 25, 5), ("US", "Merlot", 22, 4), ("US", "Merlot", 24, 3),
+                        ("US", "Syrah", 60, 50), ("FR", "Merlot", 25, 80)])   # out of price / other
+    found, levels = ad.similar_wines(ranking, "US", "Syrah", 25)
+    assert levels == ["country_variety", "variety", "country"]
+    assert list(found["value_score"]) == [2, 1, 9, 5, 4]
+    assert found.index.is_unique and found["price"].between(25 / 1.5, 25 * 1.5).all()
+    assert ad.similar_note(levels, "US", "Syrah") == (
+        "לא נמצאו 5 יינות מאותה מדינה ואותו זן בטווח המחיר, ולכן נוספו יינות Syrah ממדינות אחרות "
+        "ואחר כך יינות מזנים אחרים מארצות הברית.")
+
+
+def test_similar_wines_none():
+    found, levels = ad.similar_wines(_ranking([("US", "Syrah", 500, 1)]), "US", "Syrah", 20)
+    assert found.empty and levels == []
+    assert ad.similar_note(levels, "US", "Syrah") == "לא נמצאו יינות דומים בטווח המחיר הזה."
+
+
+# --------------------------------------------------------------------------- wine card and download
+
+def test_variety_percentile():
+    ranking = _ranking([("US", "Syrah", 20, s) for s in range(10)] + [("US", "Merlot", 20, 100)])
+    assert ad.variety_percentile(ranking, "Syrah", 9) == (90, 10)
+    assert ad.variety_percentile(ranking, "Syrah", 0) == (0, 10)
+    assert ad.variety_percentile(ranking, "Syrah", 4.5) == (50, 10)
+    assert ad.variety_percentile(ranking, "Nebbiolo", 1) == (0, 0)
+
+
+def test_variety_rank_sentence():
+    assert ad.variety_rank_sentence(97, "Pinot Noir", 9885) == \
+        "ציון השווי שלו גבוה יותר מ-97% מיינות ה-Pinot Noir (9,885 יינות)."
+    assert ad.variety_rank_sentence(50, "Tannat", 12).endswith("(12 יינות) (זן עם מעט יינות בנתונים).")
+
+
+def test_ranking_csv():
+    import io
+
+    ranking = _ranking([("US", "Syrah", 20, 1.234), ("Israel", "Merlot", 30, -0.456)])
+    ranking.loc[1, "vintage"] = None
+    data = ad.ranking_csv(ranking)
+    assert data.startswith("﻿".encode("utf-8"))
+    back = pd.read_csv(io.BytesIO(data), encoding="utf-8-sig", dtype=str, keep_default_na=False)
+    assert list(back.columns) == list(ad.CSV_COLUMNS.values())
+    assert list(back["מדינה"]) == ["ארצות הברית (US)", "ישראל (Israel)"]
+    assert list(back["בציר"]) == ["2010", ""]
+    assert list(back["ציון שווי"]) == ["1.23", "-0.46"]
+    assert list(back["דרגה"]) == ["מצוין", "מצוין"]

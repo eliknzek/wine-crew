@@ -237,3 +237,19 @@ def test_prediction_range_holds_about_8_in_10_wines(ranking):
     inside = [lo <= p <= hi for p, (lo, hi) in
               zip(sample["points"], (ad.prediction_range(x, band) for x in sample["predicted"]))]
     assert 0.77 <= sum(inside) / len(inside) <= 0.83
+
+
+def test_price_curve_matches_single_prediction(model, data):
+    row = {"vintage": 2014, "country": "US", "province": "California", "variety": "Pinot Noir",
+           "region_1": ad.UNKNOWN}
+    grid = ad.price_grid(25.0, 17.0, 75.0)
+    curve = ad.price_curve(model, data["metrics"], row, grid)
+    assert curve["predicted"].between(80, 100).all() and len(curve) == len(grid)
+    at_25 = curve.loc[curve["price"] == 25.0, "predicted"].iloc[0]
+    assert at_25 == pytest.approx(ad.predict_points(model, data["metrics"], {**row, "price": 25.0}))
+
+
+def test_similar_wines_on_real_ranking(ranking):
+    found, levels = ad.similar_wines(ranking, "US", "Pinot Noir", 25.0)
+    assert len(found) == 5 and levels == ["country_variety"]
+    assert set(found["country"]) == {"US"} and set(found["variety"]) == {"Pinot Noir"}

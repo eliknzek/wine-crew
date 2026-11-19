@@ -145,19 +145,30 @@ def options_by_parent(ranking: pd.DataFrame | None, options: dict[str, list[str]
 # --------------------------------------------------------------------------- prediction and ranking
 
 
-def predict_points(model, metrics: dict[str, Any], row: dict[str, Any]) -> float:
-    """Predicted points for one wine. vintage or region_1 of None / UNKNOWN become NaN."""
+def _frame(metrics: dict[str, Any], rows: list[dict[str, Any]]) -> pd.DataFrame:
+    """Model input for several wines. vintage or region_1 of None / UNKNOWN become NaN."""
     columns = metrics["features"]["input_columns"][metrics["selected"]]
-    values = {}
-    for col in columns:
-        value = row.get(col)
-        if value is None or value == UNKNOWN:
-            value = np.nan
-        values[col] = [value]
+    values = {col: [] for col in columns}
+    for row in rows:
+        for col in columns:
+            value = row.get(col)
+            values[col].append(np.nan if value is None or value == UNKNOWN else value)
     frame = pd.DataFrame(values, columns=columns)
     frame["price"] = frame["price"].astype("float64")
     frame["vintage"] = pd.to_numeric(frame["vintage"]).astype("float64")
-    return float(model.predict(frame)[0])
+    return frame
+
+
+def predict_points(model, metrics: dict[str, Any], row: dict[str, Any]) -> float:
+    """Predicted points for one wine. vintage or region_1 of None / UNKNOWN become NaN."""
+    return float(model.predict(_frame(metrics, [row]))[0])
+
+
+def price_curve(model, metrics: dict[str, Any], row: dict[str, Any], prices) -> pd.DataFrame:
+    """Predicted points for the same wine at each price (one predict call for the whole grid)."""
+    prices = [float(p) for p in prices]
+    predicted = model.predict(_frame(metrics, [{**row, "price": p} for p in prices]))
+    return pd.DataFrame({"price": prices, "predicted": predicted.astype(float)})
 
 
 def filter_ranking(ranking: pd.DataFrame, countries: list[str] | None = None,
@@ -385,6 +396,11 @@ def value_sentence(score: float) -> str:
     return f"{abs(shown):.1f} נקודות {side}ניקוד שצפוי ליין כזה במחיר הזה"
 
 
+def signed(value: float) -> str:
+    """'+9.1' kept as one left-to-right unit inside Hebrew text (Unicode isolate), so the sign stays put."""
+    return f"\u2066{float(value):+.1f}\u2069"
+
+
 def model_mae(metrics: dict[str, Any]) -> float:
     """Test MAE of the selected model."""
     return float(metrics["models"][metrics["selected"]]["test"]["mae"])
@@ -467,3 +483,166 @@ def agent_roles(crew: str) -> list[tuple[str, str]]:
     path = Path(__file__).resolve().parent / "crews" / CREW_DIRS[crew] / "agents.yaml"
     agents = yaml.safe_load(path.read_text(encoding="utf-8"))
     return [(key, spec["role"]) for key, spec in agents.items()]
+
+
+# --------------------------------------------------------------------------- is it worth paying more?
+
+PRICE_BAND_MIN_WINES = 30          # fewer wines than this: widen the price band to the next level
+PRICE_BAND_QUANTILES = (0.05, 0.95)
+FLAT_GAIN = 0.5                    # points; less than this up to the top of the band = "almost flat"
+FLAT_SPAN = 2.0                    # the flat stretch must cover at least a doubling of the price
+RARE_PRICE_NOTE = "המחיר שבחרת נדיר ליין כזה בנתונים, ולכן התחזית פחות בטוחה."
+
+
+def money(price: float) -> str:
+    return f"${price:,.0f}"
+
+
+def price_band(ranking: pd.DataFrame, country: str, variety: str) -> tuple[float, float, str]:
+    """(low, high, level): 5th-95th percentile of prices of the same country and variety in the
+    ranking; with fewer than 30 such wines, the variety only; then all wines."""
+    levels = [
+        ("country_variety", (ranking["country"] == country) & (ranking["variety"] == variety)),
+        ("variety", ranking["variety"] == variety),
+        ("all", pd.Series(True, index=ranking.index)),
+    ]
+    for level, mask in levels:
+        prices = ranking.loc[mask, "price"].dropna()
+        if len(prices) >= PRICE_BAND_MIN_WINES or level == "all":
+            low, high = prices.quantile(list(PRICE_BAND_QUANTILES))
+            return float(low), float(high), level
+    raise AssertionError("unreachable")
+
+
+def is_rare_price(price: float, band: tuple[float, float, str] | tuple[float, float]) -> bool:
+    return not (band[0] <= price <= band[1])
+
+
+def price_grid(chosen: float, low: float, high: float, n: int = 41) -> list[float]:
+    """Log-spaced prices from low to high, plus the chosen price and twice it (when inside the band),
+    so the sentence under the chart uses predicted values, not interpolated ones."""
+    grid = set(np.round(np.geomspace(low, high, n), 2).tolist())
+    grid.update({float(chosen), float(high)})
+    if 2 * chosen <= high:
+        grid.add(float(2 * chosen))
+    return sorted(grid)
+
+
+def _at(curve: pd.DataFrame, price: float) -> float:
+    return float(curve.loc[np.isclose(curve["price"], price), "predicted"].iloc[0])
+
+
+def flat_from(curve: pd.DataFrame, top: float) -> float | None:
+    """Lowest price from which the prediction rises less than FLAT_GAIN up to top,
+    over at least a doubling of the price; None when there is no such stretch."""
+    inside = curve[curve["price"] <= top + 1e-9].sort_values("price")
+    for price, value in zip(inside["price"], inside["predicted"]):
+        if price * FLAT_SPAN > top + 1e-9:
+            return None
+        rest = inside.loc[inside["price"] >= price, "predicted"]
+        if rest.max() - value < FLAT_GAIN:
+            return float(price)
+    return None
+
+
+def curve_sentence(curve: pd.DataFrame, chosen: float, top: float) -> str | None:
+    """One or two sentences computed from the curve; worded as what the model expects, not as cause."""
+    flat = flat_from(curve, top)
+    flat_text = (f"לפי המודל, מעל {money(flat)} הניקוד הצפוי כמעט לא עולה "
+                 f"(פחות מ-{FLAT_GAIN:g} נקודה עד {money(top)}).") if flat is not None else None
+    if flat is not None and chosen >= flat:
+        return flat_text
+    parts = []
+    # Compare with twice the price, or with the top of the band when twice is beyond it.
+    other = 2 * chosen if 2 * chosen <= top + 1e-9 else top
+    if other >= chosen * 1.2:
+        gain = _at(curve, other) - _at(curve, chosen)
+        where = "" if other == 2 * chosen else " (המחיר הגבוה בטווח הנתונים)"
+        if gain >= 0.05:
+            parts.append(f"לפי המודל, יין כזה במחיר {money(other)}{where} צפוי לקבל בערך {gain:.1f} נקודות יותר.")
+        else:
+            parts.append(f"לפי המודל, יין כזה במחיר {money(other)}{where} צפוי לקבל ניקוד כמעט זהה.")
+    if flat_text:
+        parts.append(flat_text)
+    return " ".join(parts) or None
+
+
+# --------------------------------------------------------------------------- similar wines
+
+SIMILAR_LEVELS = ("country_variety", "variety", "country")
+
+
+def similar_wines(ranking: pd.DataFrame, country: str, variety: str, price: float,
+                  n: int = 5, ratio: float = 1.5) -> tuple[pd.DataFrame, list[str]]:
+    """Up to n wines priced within price/ratio..price*ratio, best value_score first: same country
+    and variety, then (if fewer than n) same variety anywhere, then same country any variety."""
+    in_price = ranking[(ranking["price"] >= price / ratio) & (ranking["price"] <= price * ratio)]
+    masks = {
+        "country_variety": (in_price["country"] == country) & (in_price["variety"] == variety),
+        "variety": in_price["variety"] == variety,
+        "country": in_price["country"] == country,
+    }
+    chosen, levels = [], []
+    taken: set = set()
+    for level in SIMILAR_LEVELS:
+        if len(taken) >= n:
+            break
+        part = in_price[masks[level] & ~in_price.index.isin(taken)]
+        part = part.sort_values(["value_score", "title"], ascending=[False, True], kind="mergesort")
+        part = part.head(n - len(taken))
+        if len(part):
+            chosen.append(part)
+            taken.update(part.index)
+            levels.append(level)
+    result = pd.concat(chosen) if chosen else ranking.head(0)
+    return result, levels
+
+
+def similar_note(levels: list[str], country: str, variety: str, n: int = 5, found: int | None = None) -> str | None:
+    """Which widening was used, in words; None when all wines are of the same country and variety."""
+    if not levels:
+        return "לא נמצאו יינות דומים בטווח המחיר הזה."
+    extra = [lvl for lvl in levels if lvl != "country_variety"]
+    if not extra:
+        return None
+    added = {"variety": f"יינות {variety} ממדינות אחרות",
+             "country": f"יינות מזנים אחרים מ{COUNTRY_HE.get(country, country)}"}
+    return (f"לא נמצאו {n} יינות מאותה מדינה ואותו זן בטווח המחיר, ולכן נוספו "
+            + " ואחר כך ".join(added[lvl] for lvl in extra) + ".")
+
+
+# --------------------------------------------------------------------------- wine card and download
+
+SMALL_VARIETY = 20
+
+
+def variety_percentile(ranking: pd.DataFrame, variety: str, score: float) -> tuple[int, int]:
+    """(percent of wines of this variety with a lower value_score, number of wines of the variety)."""
+    scores = ranking.loc[ranking["variety"] == variety, "value_score"]
+    if not len(scores):
+        return 0, 0
+    return int(math.floor((scores < score).mean() * 100)), int(len(scores))   # floor: never "100%"
+
+
+def variety_rank_sentence(pct: int, variety: str, count: int) -> str:
+    text = f"ציון השווי שלו גבוה יותר מ-{pct}% מיינות ה-{variety} ({count:,} יינות)"
+    return text + (" (זן עם מעט יינות בנתונים)." if count < SMALL_VARIETY else ".")
+
+
+CSV_COLUMNS = {
+    "rank": "דירוג כללי", "title": "יין", "country": "מדינה", "province": "מחוז", "region_1": "אזור",
+    "variety": "זן", "vintage": "בציר", "price": "מחיר ($)", "points": "ניקוד", "label": "דרגה",
+    "predicted": "ניקוד צפוי", "value_score": "ציון שווי",
+}
+
+
+def ranking_csv(df: pd.DataFrame) -> bytes:
+    """The shown list as a CSV with Hebrew column names (utf-8 with BOM, so Excel shows Hebrew)."""
+    out = df.assign(
+        country=df["country"].map(country_label),
+        vintage=df["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
+        label=df["points"].map(score_label),
+        predicted=df["predicted"].round(2),
+        value_score=df["value_score"].round(2),
+    )
+    return out[list(CSV_COLUMNS)].rename(columns=CSV_COLUMNS).to_csv(index=False).encode("utf-8-sig")
