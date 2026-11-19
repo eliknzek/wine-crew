@@ -410,6 +410,7 @@ def dollar_label(value: float, _pos: Any = None) -> str:
 
 DOLLARS = FuncFormatter(dollar_label)
 WHOLE_YEAR = FuncFormatter(lambda value, _pos=None: f"{value:.0f}")
+THOUSANDS = FuncFormatter(lambda value, _pos=None: f"{value:,.0f}")   # 10,000
 PLATEAU_LABEL = "Gains slow from {price}"
 
 
@@ -452,6 +453,7 @@ def _chart_figures(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, 
             color="#c9a227", edgecolor="white")
     ax.set_xscale("log")
     ax.xaxis.set_major_formatter(DOLLARS)
+    ax.yaxis.set_major_formatter(THOUSANDS)
     ax.set(xlabel="Price (USD, log scale)", ylabel="Wines", title=CHART_TITLES["price_distribution_log"])
     figs["price_distribution_log"] = fig
 
@@ -461,6 +463,7 @@ def _chart_figures(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, 
                    cmap="viridis", mincnt=1)
     fig.colorbar(hb, ax=ax, label="Wines (log)")
     ax.xaxis.set_major_formatter(DOLLARS)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))   # 80, 85, 90, no 92.5
     plateau = _price_bands(df, eda["price_bands"], eda["plateau_gain_per_doubling"])["plateau_from_price"]
     if plateau is not None:
         ax.axvline(plateau, color="#d62728", linestyle="--", linewidth=1.5)

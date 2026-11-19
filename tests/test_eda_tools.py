@@ -165,3 +165,21 @@ def test_plateau_line_appears_and_disappears(model_df, eda_config):
     assert len(without["points_vs_log_price"].axes[0].lines) == 0
     for fig in list(with_line.values()) + list(without.values()):
         plt.close(fig)
+
+
+def _ylabels(ax):
+    ax.figure.canvas.draw()
+    lo, hi = ax.get_ylim()
+    return [t.get_text() for t, y in zip(ax.get_yticklabels(), ax.get_yticks()) if lo <= y <= hi]
+
+
+def test_price_histogram_counts_have_thousands_separators(figures):
+    ax = figures["price_distribution_log"].axes[0]
+    labels = _ylabels(ax)
+    assert labels and all(lab.replace(",", "").isdigit() for lab in labels)
+    assert ax.yaxis.get_major_formatter()(10000, 0) == "10,000"
+
+
+def test_points_axis_has_whole_numbers(figures):
+    labels = _ylabels(figures["points_vs_log_price"].axes[0])
+    assert labels and all(lab.lstrip("−-").isdigit() for lab in labels), labels
