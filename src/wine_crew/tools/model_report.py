@@ -139,7 +139,7 @@ def evaluation_report_md(metrics: dict[str, Any], ranking: pd.DataFrame) -> str:
 
 def _fmt2(x: float) -> str:
     """Two decimals, never "-0.00" (a tiny negative such as R² -0.0001 prints as 0.00)."""
-    text = f"{x:.2f}"
+    text = f"{x:,.2f}"
     return "0.00" if text == "-0.00" else text
 
 
@@ -164,6 +164,24 @@ def fill_metrics_table(text: str, metrics: dict[str, Any]) -> str:
     # renders the next line as part of the table.
     pattern = re.compile(r"\n*[ \t]*" + re.escape(METRICS_TABLE_PLACEHOLDER) + r"[ \t]*\n*")
     return pattern.sub(lambda _: "\n\n" + metrics_table_md(metrics) + "\n\n", text)
+
+
+COUNT_FIELDS = ("rows", "n_train", "n_test")
+
+
+def format_counts(text: str, metrics: dict[str, Any]) -> str:
+    """Write the data counts (rows, n_train, n_test) with thousands separators: 111537 -> 111,537.
+
+    Only a standalone occurrence is changed (not part of a longer number or a decimal), so years,
+    the seed and numbers already written with commas stay as they are. Formatting only:
+    the value does not change, so the number check still passes.
+    """
+    data = metrics.get("data", {})
+    for key in COUNT_FIELDS:
+        value = data.get(key)
+        if isinstance(value, int) and value >= 1000:
+            text = re.sub(rf"(?<![\d,.]){value}(?!\d|[,.]\d)", f"{value:,}", text)
+    return text
 
 
 # --------------------------------------------------------------------------- model card style

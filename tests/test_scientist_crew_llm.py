@@ -56,6 +56,8 @@ def test_scientist_crew_end_to_end(tmp_path, monkeypatch, config):
     assert json.loads((out / "contract_check.json").read_text())["passed"] is True
     card = (out / "model_card.md").read_text(encoding="utf-8")
     assert insight_number_violations(card, metrics) == []
+    rows = metrics["data"]["rows"]
+    assert f"{rows:,}" in card and str(rows) not in card.replace(f"{rows:,}", "")   # thousands separators
     table = metrics_table_md(metrics)
     assert METRICS_TABLE_PLACEHOLDER not in card and card.count(table) == 1
     # The style rules apply to what the agent wrote, i.e. with the placeholder.
