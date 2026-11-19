@@ -11,10 +11,10 @@ enableStaticServing = true
 # on the cream background its contrast is about 2.2:1. Contrast checks: tests/test_app_text.py.
 backgroundColor = "#F7F4EF"            # cream
 secondaryBackgroundColor = "#EFE8DD"   # inputs, code, expanders
-primaryColor = "#7B2D43"               # bordeaux, the same as the EDA charts
+primaryColor = "#6E0F1A"               # deep wine red (buttons, prices, headings); 11:1 on cream
 textColor = "#1F1A17"                  # near black
 borderColor = "#E2D8C8"
-linkColor = "#7B2D43"
+linkColor = "#6E0F1A"
 chartCategoricalColors = ["#7B2D43", "#C9A227", "#5E6B4E", "#8C6A4F", "#3E4A61"]
 
 # Body text in Rubik, headings in Frank Ruhl Libre (both from Google Fonts, both with Hebrew);

@@ -62,12 +62,12 @@ def test_app_runs_without_crewai_env_or_clean_data():
 def test_hero_image_is_a_small_webp_served_as_a_static_file():
     import tomllib
 
-    hero = REPO_ROOT / "app" / "static" / "hero-cellar.webp"
+    hero = REPO_ROOT / "app" / "static" / "hero-vineyard.webp"
     head = hero.read_bytes()[:12]
     assert head[:4] == b"RIFF" and head[8:12] == b"WEBP"
     assert hero.stat().st_size <= 500_000
     config = tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())
     assert config["server"]["enableStaticServing"] is True
     css = (REPO_ROOT / "app" / "style.css").read_text()
-    assert 'url("app/static/hero-cellar.webp")' in css     # relative: works under Cloud's path prefix
+    assert 'url("app/static/hero-vineyard.webp")' in css     # relative: works under Cloud's path prefix
     assert "base64" not in css

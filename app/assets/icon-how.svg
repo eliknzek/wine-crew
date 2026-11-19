@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Two gears (how it works), line icon drawn for wine-crew. -->
+  <g fill="none" stroke="#6E0F1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="20" r="7"/><circle cx="18" cy="20" r="2.5"/>
+    <path d="M18 9 V12 M18 28 V31 M7 20 H10 M26 20 H29 M10.2 12.2 L12.3 14.3 M23.7 25.7 L25.8 27.8 M10.2 27.8 L12.3 25.7 M23.7 14.3 L25.8 12.2"/>
+    <circle cx="34" cy="34" r="5"/><circle cx="34" cy="34" r="1.8"/>
+    <path d="M34 26 V28 M34 40 V42 M26 34 H28 M40 34 H42 M28.3 28.3 L29.8 29.8 M38.2 38.2 L39.7 39.7 M28.3 39.7 L29.8 38.2 M38.2 29.8 L39.7 28.3"/>
+  </g>
+</svg>

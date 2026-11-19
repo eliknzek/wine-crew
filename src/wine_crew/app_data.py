@@ -658,3 +658,24 @@ def short_title(title: Any, max_chars: int = 40) -> str:
         return text
     cut = text[:max_chars].rsplit(" ", 1)[0].rstrip(" ,-–(")
     return (cut or text[:max_chars]) + "…"
+
+
+WINE_PROPS = [("country", "מדינה"), ("province", "מחוז"), ("region_1", "אזור"), ("variety", "זן"),
+              ("vintage", "בציר")]
+
+
+def wine_props(wine) -> list[tuple[str, str]]:
+    """(Hebrew label, display value) for the wine card's property list; missing values read 'לא ידוע'."""
+    out = []
+    for key, label in WINE_PROPS:
+        value = wine[key]
+        if value is None or (not isinstance(value, str) and pd.isna(value)) or value == "":
+            text = UNKNOWN
+        elif key == "country":
+            text = country_label(value)
+        elif key == "vintage":
+            text = str(int(value))
+        else:
+            text = str(value)
+        out.append((label, text))
+    return out

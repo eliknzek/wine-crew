@@ -280,6 +280,22 @@ def test_theme_text_contrast_meets_wcag_aa():
     assert contrast_ratio("#FFFFFF", theme["primaryColor"]) >= 4.5                    # hovered button
 
 
+def test_deep_wine_red_headings_meet_wcag_aa():
+    """The deep red used for the large headings and the guide arches, on cream and on white cards."""
+    red = _css_value("wine-red").split()[0]
+    theme = _theme()
+    assert red.upper() == theme["primaryColor"].upper()
+    assert contrast_ratio(red, theme["backgroundColor"]) >= 4.5
+    assert contrast_ratio(red, "#FFFFFF") >= 4.5
+
+
+def test_wine_props_lists_every_property():
+    wine = {"country": "US", "province": "California", "region_1": None, "variety": "Syrah", "vintage": 2010.0}
+    assert ad.wine_props(wine) == [("מדינה", "ארצות הברית (US)"), ("מחוז", "California"),
+                                   ("אזור", ad.UNKNOWN), ("זן", "Syrah"), ("בציר", "2010")]
+    assert ad.wine_props({**wine, "vintage": float("nan")})[-1] == ("בציר", ad.UNKNOWN)
+
+
 def _overlay_on_white(rgb, alpha):
     return tuple(alpha * c + (1 - alpha) * 255 for c in rgb)
 
@@ -291,6 +307,6 @@ def test_hero_overlay_is_just_dark_enough_for_white_text():
     alpha = float(_css_value("hero-overlay-min"))
     lowest = next(a / 100 for a in range(101)
                   if contrast_ratio("#FFFFFF", _overlay_on_white(rgb, a / 100)) >= 4.5)
-    assert lowest == 0.58
+    assert lowest == 0.60
     assert contrast_ratio("#FFFFFF", _overlay_on_white(rgb, alpha)) >= 4.5
     assert lowest < alpha <= lowest + 0.05

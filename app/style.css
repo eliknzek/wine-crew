@@ -2,20 +2,22 @@
    streamlit_app.py. Colors come from .streamlit/config.toml ([theme]); this file adds layout,
    right-to-left text and the cellar look. Selectors use data-testid and st-key-KEY
    (containers created with key=...), which are stable across Streamlit versions.
-   {{DIVIDER_DATA_URI}} is replaced with app/assets/divider.svg as a data URI at load time. */
+   Each SVG placeholder (two braces, "SVG:", a file name, two braces) is replaced with that
+   file from app/assets/ as a data URI at load time. */
 
 /* ---- Variables ------------------------------------------------------------------------- */
 :root {
-  --wine-bordeaux: #7B2D43;
+  --wine-red: #6E0F1A;           /* deep wine red: headings, prices, buttons (11:1 on cream) */
   --wine-gold: #C9A227;          /* decoration only, never text (contrast 2.2:1 on cream) */
   --wine-cream: #F7F4EF;
   --wine-card: #FFFFFF;
-  --wine-divider: url("{{DIVIDER_DATA_URI}}");
+  --wine-divider: url("{{SVG:divider}}");
+  --wine-grapes: url("{{SVG:grapes-line}}");
   /* Dark overlay on the hero photo. The minimum alpha keeps white text at >= 4.5:1 even over a
-     white pixel (tests/test_app_text.py computes the lowest passing value, 0.58, and checks this
-     one is just above it), so the photo still shows through. */
-  --hero-overlay-rgb: 43, 10, 20;
-  --hero-overlay-min: 0.62;
+     white pixel (tests/test_app_text.py computes the lowest passing value, 0.60, and checks this
+     one is just above it), so the photo still shows through. Deep wine red, like the headings. */
+  --hero-overlay-rgb: 74, 8, 16;
+  --hero-overlay-min: 0.64;
 }
 
 /* ---- Right-to-left layout -------------------------------------------------------------- */
@@ -36,7 +38,7 @@
 [data-testid="stMainBlockContainer"] { padding-top: 3.5rem; }
 [data-testid="stMain"] { overflow-x: clip; }   /* the full-bleed hero must not add a side scroll */
 
-/* ---- Hero: full-width photo band with a dark bordeaux overlay --------------------------- */
+/* ---- Hero: full-width photo band with a dark wine-red overlay --------------------------- */
 .st-key-hero {
   /* Full bleed, independent of text direction: the box starts at the column's right edge
      (RTL), moves left by half the column, then right by half its own (window) width. */
@@ -46,7 +48,7 @@
   background:
     linear-gradient(rgba(var(--hero-overlay-rgb), var(--hero-overlay-min)),
                     rgba(var(--hero-overlay-rgb), calc(var(--hero-overlay-min) + 0.12))),
-    url("app/static/hero-cellar.webp") center / cover no-repeat;
+    url("app/static/hero-vineyard.webp") center / cover no-repeat;
   text-align: center;
 }
 .st-key-hero [data-testid="stHeading"], .st-key-hero [data-testid="stHeading"] h1,
@@ -78,17 +80,17 @@
   background: var(--wine-divider) right / auto 22px no-repeat;
 }
 
-/* ---- Buttons: thin bordeaux outline, filled only on hover ------------------------------ */
+/* ---- Buttons: thin wine-red outline, filled only on hover ------------------------------ */
 [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"],
 [data-testid="stDownloadButton"] button {
-  background: transparent; color: var(--wine-bordeaux);
-  border: 1px solid var(--wine-bordeaux); border-radius: 2px;
+  background: transparent; color: var(--wine-red);
+  border: 1px solid var(--wine-red); border-radius: 2px;
 }
 [data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-secondary"]:hover,
 [data-testid="stDownloadButton"] button:hover,
 [data-testid="stBaseButton-primary"]:focus-visible, [data-testid="stBaseButton-secondary"]:focus-visible,
 [data-testid="stDownloadButton"] button:focus-visible {
-  background: var(--wine-bordeaux); color: #FFFFFF; border-color: var(--wine-bordeaux);
+  background: var(--wine-red); color: #FFFFFF; border-color: var(--wine-red);
 }
 [data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-secondary"] p { color: inherit; }
 
@@ -101,14 +103,68 @@
 }
 [class*="st-key-top_wine_"] .stMarkdown p { text-align: center; }
 .wine-name { font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.05rem; direction: ltr; }
-.wine-price { color: var(--wine-bordeaux); font-size: 1.35rem; font-weight: 500; }
+.wine-price { color: var(--wine-red); font-size: 1.35rem; font-weight: 500; }
+
+/* ---- Large headings in deep wine red (the hero title stays white) ---------------------- */
+[data-testid="stTabs"] [data-testid="stHeading"] h3, [data-testid="stTabs"] .stMarkdown h1,
+[data-testid="stTabs"] .stMarkdown h2 { color: var(--wine-red); }
+
+/* ---- Guide: four arch frames under the hero, one per tab (explanation only, not buttons) */
+.wine-guide {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 14rem)); justify-content: center;
+  gap: 1.25rem; margin: 1.75rem 0 0.5rem; direction: rtl;
+}
+.wine-arch {
+  /* An arch: a half-circle top (radius = half the width) over straight sides. */
+  border: 1px solid var(--wine-gold); border-radius: 7rem 7rem 6px 6px;
+  background: var(--wine-card); padding: 2.4rem 1rem 1.1rem; text-align: center;
+}
+.wine-arch-icon { width: 46px; height: 46px; margin: 0 auto 0.5rem; background: center / contain no-repeat; }
+.icon-find { background-image: url("{{SVG:icon-find}}"); }
+.icon-check { background-image: url("{{SVG:icon-check}}"); }
+.icon-learned { background-image: url("{{SVG:icon-learned}}"); }
+.icon-how { background-image: url("{{SVG:icon-how}}"); }
+.wine-arch-title { font-family: "Frank Ruhl Libre", serif; font-weight: 700; font-size: 1.1rem; color: var(--wine-red); }
+.wine-arch p { margin: 0.35rem 0 0; font-size: 0.88rem; line-height: 1.45; }
+
+/* ---- Small wine cards ("3 היינות השווים ביותר", "אולי תאהבו גם") ------------------------ */
+[class*="st-key-similar_wine_"] {
+  background: var(--wine-card); border-top: 2px solid var(--wine-gold) !important;
+  text-align: center; height: 100%;
+}
+[class*="st-key-similar_wine_"] .stMarkdown p { text-align: center; }
+.wine-meta { font-size: 0.9rem; }
+
+/* ---- Wine card in product-page style, with a faint grape drawing behind ---------------- */
+.st-key-wine_card {
+  background: var(--wine-card) var(--wine-grapes) left 1.5rem center / auto 85% no-repeat;
+  border-top: 2px solid var(--wine-gold) !important; padding: 1.25rem 1.5rem !important;
+}
+.wine-card-title {
+  font-family: "Frank Ruhl Libre", serif; font-weight: 700; color: var(--wine-red);
+  font-size: clamp(1.4rem, 3.2vw, 2rem); line-height: 1.25; direction: ltr; text-align: right;
+  unicode-bidi: plaintext; margin: 0.1rem 0 0.9rem;
+}
+.wine-props {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem 2rem;
+  max-width: 34rem; margin: 0 0 1rem;
+}
+.wine-props div { display: flex; gap: 0.5rem; border-bottom: 1px dotted var(--wine-gold); padding: 0.2rem 0; }
+.wine-props dt { color: #5A4E47; min-width: 3.5rem; }   /* 7.6:1 on white */
+.wine-props dd { margin: 0; font-weight: 500; }
+.wine-highlight {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1.5rem;
+  padding: 0.6rem 0; margin-bottom: 0.4rem;
+}
+.wine-highlight .wine-price { font-size: 1.7rem; }
+.wine-highlight span { font-size: 1.05rem; }
 
 /* ---- Footer ---------------------------------------------------------------------------- */
 .wine-footer {
   margin-top: 3rem; padding: 1.25rem 0 0.5rem; border-top: 1px solid var(--wine-gold);
   text-align: center; font-size: 0.9rem; color: #4A403A;   /* 9:1 on cream */
 }
-.wine-footer a { color: var(--wine-bordeaux); }
+.wine-footer a { color: var(--wine-red); }
 
 /* ---- Mobile (narrow screens) ----------------------------------------------------------- */
 /* Metrics wrap instead of being cut ("2026-11-18 0..."). */
@@ -116,6 +172,11 @@
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
 }
 @media (max-width: 640px) {
+  .wine-guide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .wine-arch { border-radius: 5rem 5rem 6px 6px; padding: 1.8rem 0.6rem 0.9rem; }
+  .wine-props { grid-template-columns: 1fr; }
+  /* Narrow screens: the grape drawing goes small into the lower corner, away from the list. */
+  .st-key-wine_card { background-size: auto 38%; background-position: left 0.5rem bottom 0.5rem; }
   [data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
   .st-key-hero { padding: 3rem 1rem 2.25rem; }
   .st-key-hero .stMarkdown p { font-size: 0.95rem; }
