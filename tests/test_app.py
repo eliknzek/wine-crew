@@ -282,3 +282,63 @@ def test_glossary_help_on_terms(app):
     assert any(m.proto.help == ad.GLOSSARY["out-of-fold"] for m in find.markdown)
     assert any(ad.GLOSSARY["חציון"] in (h.proto.help or "") for h in learned.subheader)
     assert any(ad.GLOSSARY["MAE"] in (h.proto.help or "") for h in how.subheader)
+
+
+def _predict(app, country="US", province="California", variety="Pinot Noir", price=25.0, vintage=2014):
+    app.selectbox(key="form_country").select(country).run()
+    app.selectbox(key="form_province").select(province)
+    app.selectbox(key="form_variety").select(variety)
+    app.number_input(key="form_price").set_value(price)
+    app.selectbox(key="form_vintage").select(vintage)
+    app.button(key="predict").click().run()
+    assert not app.exception, app.exception
+    return _tab(app, "בדוק יין")
+
+
+def test_price_chart_and_sentence_after_prediction(app):
+    tab = _predict(app)
+    assert len(tab.get("vega_lite_chart")) == 1
+    ranking, data = ad.load_ranking(CONFIG), ad.load_all(CONFIG)
+    low, high, _ = ad.price_band(ranking, "US", "Pinot Noir")
+    row = {"vintage": 2014, "country": "US", "province": "California", "variety": "Pinot Noir",
+           "region_1": ad.UNKNOWN}
+    curve = ad.price_curve(ad.load_model(CONFIG), data["metrics"], row, ad.price_grid(25.0, low, high))
+    sentence = ad.curve_sentence(curve, 25.0, high)
+    assert sentence and any(m.value == sentence for m in tab.markdown)
+    assert not any(c.value == ad.RARE_PRICE_NOTE for c in tab.caption)          # $25 is common here
+
+
+def test_rare_price_note_after_prediction(app):
+    tab = _predict(app, price=1500.0)
+    assert any(c.value == ad.RARE_PRICE_NOTE for c in tab.caption)
+
+
+def test_similar_wines_after_prediction(app):
+    tab = _predict(app)
+    table = next(d for d in tab.dataframe if "title" in d.value.columns).value
+    assert 1 <= len(table) <= 5
+    assert set(table["country"]) == {"ארצות הברית (US)"} and set(table["variety"]) == {"Pinot Noir"}
+    assert table["price"].between(25 / 1.5, 25 * 1.5).all()
+    assert table["value_score"].is_monotonic_decreasing
+
+
+def test_wine_card_after_selecting_a_row(app):
+    find = _tab(app, "מצא יין שווה")
+    assert any(c.value == "בחרו שורה בטבלה כדי לראות את פרטי היין." for c in find.caption)
+    app.session_state["value_table"] = {"selection": {"rows": [0], "columns": [], "cells": []}}
+    app.run()
+    assert not app.exception, app.exception
+    ranking = ad.load_ranking(CONFIG)
+    first = ad.filter_ranking(ranking, top=50).iloc[0]
+    card = _tab(app, "מצא יין שווה")
+    text = [m.value for m in card.markdown]
+    assert f"**{first['title']}**" in text
+    assert any(ad.value_sentence(first["value_score"]) in t for t in text)
+    pct, count = ad.variety_percentile(ranking, first["variety"], first["value_score"])
+    assert ad.variety_rank_sentence(pct, first["variety"], count) in text
+    assert any(ad.score_text(first["points"]) in t for t in text)
+
+
+def test_csv_download_button(app):
+    buttons = _tab(app, "מצא יין שווה").get("download_button")
+    assert [b.proto.label for b in buttons] == ["הורדת הרשימה (CSV)"]

@@ -18,6 +18,7 @@ for folder in (SRC, APP_DIR):
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
 
+import altair as alt  # noqa: E402
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
@@ -96,7 +97,25 @@ def _band(fingerprint: tuple):  # noqa: ARG001 - cache key only
     return None if ranking is None else ad.residual_band(ranking)
 
 
-def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs) -> None:
+@st.cache_data(max_entries=64)
+def _curve(model_fingerprint: tuple, row: tuple, prices: tuple, _model, _metrics):  # noqa: ARG001
+    """Predicted points on the price grid, once per input (the key: model file + the form values)."""
+    return ad.price_curve(_model, _metrics, dict(row), prices)
+
+
+def price_chart(curve: pd.DataFrame, chosen: float, chosen_points: float):
+    """Predicted points by price (log scale, $ on the axis), with a dot on the chosen price."""
+    x = alt.X("price:Q", title="מחיר", scale=alt.Scale(type="log"), axis=alt.Axis(format="$,.0f"))
+    y = alt.Y("predicted:Q", title="ניקוד צפוי", scale=alt.Scale(zero=False))
+    tooltip = [alt.Tooltip("price:Q", title="מחיר", format="$,.0f"),
+               alt.Tooltip("predicted:Q", title="ניקוד צפוי", format=".1f")]
+    line = alt.Chart(curve).mark_line().encode(x=x, y=y, tooltip=tooltip)
+    dot = alt.Chart(pd.DataFrame({"price": [chosen], "predicted": [chosen_points]})).mark_point(
+        size=120, filled=True).encode(x=x, y=y, tooltip=tooltip)
+    return (line + dot).properties(title="הניקוד הצפוי ליין כזה לפי מחיר", height=260)
+
+
+def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs):
     """The one way to show a table: columns reversed (first column on the right), index hidden,
     text columns aligned right. Data, rounding, row order and column names are unchanged."""
     config = dict(column_config or {})
@@ -108,7 +127,8 @@ def show_table_rtl(df: pd.DataFrame, column_config: dict | None = None, **kwargs
             config[col] = st.column_config.TextColumn(current, alignment="right")
         elif isinstance(current, dict):
             config[col] = {**current, "alignment": "right"}
-    st.dataframe(ad.rtl_columns(df), hide_index=True, width="stretch", column_config=config, **kwargs)
+    return st.dataframe(ad.rtl_columns(df), hide_index=True, width="stretch", column_config=config,
+                        **kwargs)
 
 
 def _missing(name: str) -> None:
@@ -162,10 +182,10 @@ with value_tab:
         shown = result.assign(vintage=result["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
                               country=result["country"].map(ad.country_label),
                               label=result["points"].map(ad.score_label))
-        show_table_rtl(
+        event = show_table_rtl(
             shown[["rank", "title", "country", "province", "variety", "vintage", "price", "points",
                    "label", "predicted", "value_score"]],
-            key="value_table",
+            key="value_table", on_select="rerun", selection_mode="single-row",
             column_config={
                 "rank": "דירוג כללי", "title": "יין", "country": "מדינה", "province": "מחוז",
                 "variety": "זן", "vintage": st.column_config.TextColumn("בציר"),
@@ -180,6 +200,25 @@ with value_tab:
             first = result.iloc[0]
             st.caption(f"לדוגמה, ליין הראשון ציון שווי {first['value_score']:+.1f}: "
                        f"{ad.value_sentence(first['value_score'])}.")
+            st.download_button("הורדת הרשימה (CSV)", ad.ranking_csv(result), file_name="value_wines.csv",
+                               mime="text/csv", key="value_csv")
+            rows = event.selection.rows if event is not None else []
+            if not rows:
+                st.caption("בחרו שורה בטבלה כדי לראות את פרטי היין.")
+            else:
+                wine = result.iloc[rows[0]]
+                pct, count = ad.variety_percentile(ranking, wine["variety"], wine["value_score"])
+                region = wine["region_1"] if isinstance(wine["region_1"], str) else ad.UNKNOWN
+                vintage_text = "" if pd.isna(wine["vintage"]) else str(int(wine["vintage"]))
+                with st.container(border=True, key="wine_card"):
+                    st.markdown(f"**{wine['title']}**")
+                    st.markdown(
+                        f"{ad.country_label(wine['country'])} · {wine['province']} · {region} · "
+                        f"{wine['variety']} · בציר {vintage_text or ad.UNKNOWN} · {ad.money(wine['price'])}")
+                    st.markdown(f"ניקוד בפועל: **{ad.score_text(wine['points'])}** · "
+                                f"ניקוד צפוי: {wine['predicted']:.1f}")
+                    st.markdown(f"ציון שווי {wine['value_score']:+.1f}: {ad.value_sentence(wine['value_score'])}.")
+                    st.markdown(ad.variety_rank_sentence(pct, wine["variety"], count))
 
 # --------------------------------------------------------------------------- check a wine
 with predict_tab:
@@ -226,6 +265,45 @@ with predict_tab:
                 st.markdown(ad.prediction_sentence(points, band))
             st.caption(f"התחזית המדויקת: {points:.1f} · {ad.accuracy_sentence(metrics)} "
                        f"(המודל {metrics['selected']}).")
+
+            if ranking is not None:
+                st.subheader("האם שווה לשלם יותר?")
+                low, high, _level = ad.price_band(ranking, country, variety)
+                grid = ad.price_grid(price, low, high)
+                curve = _curve(ad.file_fingerprint([ad.model_file(config)]),
+                               tuple(sorted((k, v) for k, v in row.items() if k != "price")),
+                               tuple(grid), model, metrics)
+                st.altair_chart(price_chart(curve, price, points), width="stretch", key="price_chart")
+                sentence = ad.curve_sentence(curve, price, high)
+                if sentence:
+                    st.markdown(sentence)
+                if ad.is_rare_price(price, (low, high)):
+                    st.caption(ad.RARE_PRICE_NOTE)
+
+                st.subheader("יינות שכדאי להכיר")
+                similar, levels = ad.similar_wines(ranking, country, variety, price)
+                st.caption(f"עד 5 יינות במחיר {ad.money(price / 1.5)}–{ad.money(price * 1.5)}, "
+                           "עם ציון השווי הגבוה ביותר.")
+                if len(similar):
+                    shown = similar.assign(
+                        vintage=similar["vintage"].map(lambda v: "" if pd.isna(v) else str(int(v))),
+                        country=similar["country"].map(ad.country_label),
+                        label=similar["points"].map(ad.score_label))
+                    show_table_rtl(
+                        shown[["title", "country", "variety", "vintage", "price", "points", "label",
+                               "value_score"]],
+                        key="similar_table",
+                        column_config={
+                            "title": "יין", "country": "מדינה", "variety": "זן",
+                            "vintage": st.column_config.TextColumn("בציר"),
+                            "price": st.column_config.NumberColumn("מחיר", format="$%.0f"),
+                            "points": "ניקוד", "label": "דרגה",
+                            "value_score": st.column_config.NumberColumn("ציון שווי", format="%+.1f",
+                                                                         help=ad.GLOSSARY["ציון שווי"]),
+                        })
+                note = ad.similar_note(levels, country, variety)
+                if note:
+                    st.caption(note)
 
 # --------------------------------------------------------------------------- what we learned
 with learned_tab:
