@@ -414,8 +414,7 @@ def prediction_range(points: float, band: tuple[float, float]) -> tuple[int, int
 
 def prediction_sentence(points: float, band: tuple[float, float]) -> str:
     low, high = prediction_range(points, band)
-    return (f"{score_text(points)}. "
-            f"ב-8 מתוך 10 יינות דומים, הניקוד האמיתי היה בין {low} ל-{high}.")
+    return f"ב-8 מתוך 10 יינות דומים, הניקוד האמיתי היה בין {low} ל-{high}."
 
 
 # --------------------------------------------------------------------------- the Flow, step by step

@@ -54,7 +54,7 @@ def test_prediction_range_rounds_inward_and_clips():
 
 def test_prediction_sentence():
     assert ad.prediction_sentence(89.0, (-2.78, 2.63)) == \
-        "89: טוב מאוד. ב-8 מתוך 10 יינות דומים, הניקוד האמיתי היה בין 87 ל-91."
+        "ב-8 מתוך 10 יינות דומים, הניקוד האמיתי היה בין 87 ל-91."
 
 
 def test_glossary_has_every_term():

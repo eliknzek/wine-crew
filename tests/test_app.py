@@ -73,6 +73,7 @@ def test_prediction_form(app):
     assert metric.proto.help == ad.GLOSSARY["ניקוד צפוי"]
     band = ad.residual_band(ad.load_ranking(CONFIG))                     # from value_ranking.csv
     assert any(m.value == ad.prediction_sentence(expected, band) for m in app.markdown)
+    assert sum(ad.score_text(expected) in m.value for m in app.markdown) == 0   # the score is shown once, in the metric
     assert any(f"התחזית המדויקת: {expected:.1f}" in c.value for c in app.caption)
     assert any(ad.accuracy_sentence(data["metrics"]) in c.value for c in app.caption)
 
