@@ -59,15 +59,22 @@ def test_app_runs_without_crewai_env_or_clean_data():
     assert "probe ok" in result.stdout
 
 
-def test_hero_image_is_a_small_webp_served_as_a_static_file():
+def test_static_images_are_small_webp_files_all_used_by_the_css():
+    """Every file in app/static/ is a real WebP, small for its place, and referenced in style.css
+    by a relative url (works under Cloud's path prefix); every such url points at a file."""
+    import re
     import tomllib
 
-    hero = REPO_ROOT / "app" / "static" / "hero-vineyard.webp"
-    head = hero.read_bytes()[:12]
-    assert head[:4] == b"RIFF" and head[8:12] == b"WEBP"
-    assert hero.stat().st_size <= 500_000
+    static = REPO_ROOT / "app" / "static"
+    files = {p.name: p for p in static.iterdir() if not p.name.startswith(".")}
+    assert "hero-cellar-barrels.webp" in files and "hero-vineyard.webp" not in files
+    for name, path in files.items():
+        head = path.read_bytes()[:12]
+        assert head[:4] == b"RIFF" and head[8:12] == b"WEBP", name
+        assert path.stat().st_size <= (500_000 if name.startswith("hero-") else 300_000), name
     config = tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())
     assert config["server"]["enableStaticServing"] is True
     css = (REPO_ROOT / "app" / "style.css").read_text()
-    assert 'url("app/static/hero-vineyard.webp")' in css     # relative: works under Cloud's path prefix
+    used = set(re.findall(r'url\("app/static/([^"]+)"\)', css))
+    assert used == set(files)                  # no orphan files, no broken links
     assert "base64" not in css

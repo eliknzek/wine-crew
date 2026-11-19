@@ -301,17 +301,34 @@ def test_wine_props_lists_every_property():
     assert ad.wine_props({**wine, "vintage": float("nan")})[-1] == ("בציר", ad.UNKNOWN)
 
 
-def _overlay_on_white(rgb, alpha):
-    return tuple(alpha * c + (1 - alpha) * 255 for c in rgb)
+def _hero_brightest_pixel():
+    """The brightest pixel of the hero photo actually used (the url in style.css)."""
+    import re
+
+    from PIL import Image
+
+    from wine_crew.config import REPO_ROOT
+    css = (REPO_ROOT / "app" / "style.css").read_text()
+    name = re.search(r'\.st-key-hero \{[^}]*url\("app/static/([^"]+)"\)', css, re.S).group(1)
+    image = Image.open(REPO_ROOT / "app" / "static" / name).convert("RGB")
+    pixels = list(image.getdata())
+    return max(pixels, key=_luminance)
+
+
+def _overlay_on(pixel, rgb, alpha):
+    return tuple(alpha * c + (1 - alpha) * p for c, p in zip(rgb, pixel))
 
 
 def test_hero_overlay_is_just_dark_enough_for_white_text():
-    """Worst case: a white pixel under the overlay. The CSS alpha is the lowest that still gives
-    white text 4.5:1, plus a small margin, so the photo stays visible."""
+    """Worst case: the brightest pixel of the hero photo under the overlay. The CSS alpha is the
+    lowest that still gives white text 4.5:1 there, plus a small margin, so the photo stays visible."""
     rgb = tuple(int(v) for v in _css_value("hero-overlay-rgb").split(","))
     alpha = float(_css_value("hero-overlay-min"))
+    brightest = _hero_brightest_pixel()
     lowest = next(a / 100 for a in range(101)
-                  if contrast_ratio("#FFFFFF", _overlay_on_white(rgb, a / 100)) >= 4.5)
-    assert lowest == 0.60
-    assert contrast_ratio("#FFFFFF", _overlay_on_white(rgb, alpha)) >= 4.5
+                  if contrast_ratio("#FFFFFF", _overlay_on(brightest, rgb, a / 100)) >= 4.5)
+    # The cellar photo has pure white pixels (the light at the end of the arch), so this equals
+    # the theoretical worst case of a white pixel.
+    assert brightest == (255, 255, 255) and lowest == 0.60
+    assert contrast_ratio("#FFFFFF", _overlay_on(brightest, rgb, alpha)) >= 4.5
     assert lowest < alpha <= lowest + 0.05
