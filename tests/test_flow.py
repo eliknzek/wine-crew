@@ -11,15 +11,18 @@ import pandas as pd
 import pytest
 
 from wine_crew.checks import FlowCheckError, check_features, expected_feature_columns
-from wine_crew.flow import crew_cost, run_flow
+from wine_crew.flow import run_flow, token_cost
 from wine_crew.tools.crewai_tools import VALUE_RANKING_COLUMNS
 from wine_crew.tools.contract_tools import build_contract, save_contract
 from wine_crew.tools.data_tools import clean_data, load_contract_template, load_raw, read_clean_csv
 from wine_crew.tools.model_report import evaluation_report_md, metrics_document
 from wine_crew.tools.model_tools import build_features, rank_value_wines, save_model, train_models
 
+# What CrewAI's crew.token_usage reports (only cross-checked) ...
 FAKE_USAGE = {"total_tokens": 1500, "prompt_tokens": 1000, "cached_prompt_tokens": 400,
               "completion_tokens": 500, "successful_requests": 3}
+# ... and what RequestCounter counts from OpenAI's per-call usage (used for the cost).
+FAKE_COUNTS = {"requests": 3, "input_tokens": 1000, "cached_input_tokens": 400, "output_tokens": 500}
 
 
 @pytest.fixture
@@ -29,7 +32,11 @@ def flow_config(tmp_path, model_config, model_df):
     template = copy.deepcopy(load_contract_template(model_config))
     template["row_count"] = {"min": 1, "max": 1000}
     (tmp_path / "template.json").write_text(json.dumps(template))
+    # Every artifacts/ path points into tmp, so no test can touch the real artifacts/.
+    cfg["paths"].update({k: str(tmp_path / v) for k, v in cfg["paths"].items()
+                         if isinstance(v, str) and v.startswith("artifacts/")})
     cfg["paths"].update({
+        "staging_root": str(tmp_path / "build" / "runs"),
         "raw_csv": str(tmp_path / "raw.csv"),
         "contract_template": str(tmp_path / "template.json"),
         "artifacts_analyst": str(analyst), "artifacts_scientist": str(sci),
@@ -54,7 +61,7 @@ def stub_analyst(corrupt=None):
         save_contract(build_contract(clean, sha, config), out["contract"])
         if corrupt:
             corrupt(config)
-        return {"seconds": 1.0, "token_usage": FAKE_USAGE}
+        return {"seconds": 1.0, "token_usage": FAKE_USAGE, "usage": FAKE_COUNTS}
     return run
 
 
@@ -80,7 +87,7 @@ def stub_scientist(corrupt=None, calls=None):
             f"{sci}/value_ranking.csv", index=False)
         if corrupt:
             corrupt(config)
-        return {"seconds": 2.0, "token_usage": FAKE_USAGE}
+        return {"seconds": 2.0, "token_usage": FAKE_USAGE, "usage": FAKE_COUNTS}
     return run
 
 
@@ -90,7 +97,15 @@ def _mk(path):
 
 
 def _summary(cfg):
+    """artifacts/run_summary.json: written only by a run that passed and was promoted."""
     return json.loads(open(cfg["paths"]["run_summary"]).read())
+
+
+def _failed_summary(cfg):
+    """logs/run_<ts>_summary.json: where a failed run writes its summary."""
+    found = sorted(Path(cfg["paths"]["logs"]).glob("run_*_summary.json"))
+    assert len(found) == 1, found
+    return json.loads(found[0].read_text())
 
 
 def _log_text(cfg):
@@ -102,8 +117,9 @@ def _log_text(cfg):
 def _assert_stopped(cfg, capsys, code, check, message_start):
     err = capsys.readouterr().err
     assert code == 1
-    summary = _summary(cfg)
+    summary = _failed_summary(cfg)
     assert summary["status"] == "failed"
+    assert "artifacts/ was not changed" in err
     assert summary["failed_check"] == check
     assert summary["error"].startswith(message_start)
     assert "Traceback" not in err
@@ -126,8 +142,10 @@ def test_passing_run(flow_config, capsys):
     assert s["rows"]["raw"] == 600 and s["rows"]["clean"] == s["rows"]["features"] > 0
     assert s["rows"]["train"] + s["rows"]["test"] == s["rows"]["clean"]
     assert len(s["raw_sha256"]) == 64 and s["selected"] in ("v1", "v2")
-    assert s["crews"]["crew1"]["cost_usd"] == crew_cost(FAKE_USAGE, flow_config)
-    assert s["total_cost_usd"] == pytest.approx(2 * crew_cost(FAKE_USAGE, flow_config))
+    assert s["crews"]["crew1"]["cost_usd"] == token_cost(FAKE_COUNTS, flow_config)
+    assert s["total_cost_usd"] == pytest.approx(2 * token_cost(FAKE_COUNTS, flow_config))
+    assert s["tokens"] == {"requests": 6, "input_tokens": 2000, "cached_input_tokens": 800, "output_tokens": 1000}
+    assert {k: s["crews"]["crew1"][k] for k in FAKE_COUNTS} == FAKE_COUNTS
     log = _log_text(flow_config)
     assert s["run_id"] in log
     for step in ("preflight", "crew1", "gate_contract", "crew2", "gate_features", "gate_model"):
@@ -135,16 +153,33 @@ def test_passing_run(flow_config, capsys):
     for check in ("preflight", "contract", "features", "model"):
         assert f"check {check}: PASSED" in log
     assert "crew1 rows: in=600 out=" in log and "crew2 rows: in=" in log and "train rows: train=" in log
-    assert "crew1 tokens: total=1500" in log and "crew2 tokens:" in log and "cost=$" in log
+    assert "crew1 usage: requests=3 input=1000 cached_input=400 output=500 cost=$" in log
+    assert "crew2 usage:" in log and "WARNING" not in log
     assert s["raw_sha256"] in log
     assert s["artifacts"]["value_ranking"].endswith("value_ranking.csv")
     assert re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ INFO \[" + re.escape(s["run_id"]) + "]", log)
 
 
-def test_crew_cost():
+def test_token_cost():
     cfg = {"llm": {"price_per_million": {"input": 0.15, "cached_input": 0.075, "output": 0.60}}}
-    assert crew_cost(FAKE_USAGE, cfg) == pytest.approx((600 * 0.15 + 400 * 0.075 + 500 * 0.60) / 1e6)
-    assert crew_cost(None, cfg) == 0.0
+    # 600 uncached input, 400 cached input, 500 output
+    assert token_cost(FAKE_COUNTS, cfg) == pytest.approx((600 * 0.15 + 400 * 0.075 + 500 * 0.60) / 1e6)
+    assert token_cost(None, cfg) == 0.0
+    # The real run of PR #11 as OpenAI billed it: 19,471 input (4,352 cached), 2,586 output.
+    billed = {"input_tokens": 19471, "cached_input_tokens": 4352, "output_tokens": 2586}
+    assert token_cost(billed, cfg) == pytest.approx(0.004146, abs=1e-6)
+
+
+def test_request_count_mismatch_is_a_warning_not_a_failure(flow_config):
+    analyst = stub_analyst()
+
+    def inflated(config):
+        return {**analyst(config), "token_usage": {**FAKE_USAGE, "successful_requests": 12}}
+
+    assert run_flow(flow_config, inflated, stub_scientist()) == 0
+    log = _log_text(flow_config)
+    assert "WARNING" in log and "crew1: CrewAI reports 12 requests but 3 were counted" in log
+    assert _summary(flow_config)["crews"]["crew1"]["requests"] == 3
 
 
 # --------------------------------------------------------------------------- preflight
@@ -265,7 +300,7 @@ def test_gate3_stops_on_bad_model(flow_config, capsys, corrupt, expected):
 
 def test_gate3_message_format(flow_config, capsys):
     run_flow(flow_config, stub_analyst(), stub_scientist(_worse_than_baseline))
-    err = _summary(flow_config)["error"]
+    err = _failed_summary(flow_config)["error"]
     assert re.fullmatch(r"Model check failed: MAE \d+\.\d\d >= baseline \d+\.\d\d", err)
 
 
@@ -280,3 +315,152 @@ def test_crew_exception_is_a_controlled_stop(flow_config, capsys):
     s, log = _assert_stopped(flow_config, capsys, code, "crew1",
                              "RuntimeError: Task failed guardrail validation after 0 retries.")
     assert "Traceback" in log                  # the traceback goes to the log only
+
+
+def test_timestamps_are_utc_with_z(flow_config, capsys):
+    from wine_crew.flow import utc_stamp
+    from datetime import datetime, timezone, timedelta
+
+    assert utc_stamp(datetime(2026, 11, 19, 12, 34, 51, tzinfo=timezone(timedelta(hours=2)))) == "2026-11-19T10:34:51Z"
+    assert run_flow(flow_config, stub_analyst(), stub_scientist()) == 0
+    s = _summary(flow_config)
+    stamp = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
+    assert re.fullmatch(stamp, s["started_at"]) and re.fullmatch(stamp, s["finished_at"])
+    assert all(re.match(stamp + " ", line) for line in _log_text(flow_config).splitlines() if line.strip())
+
+
+# --------------------------------------------------------------------------- staging and promotion
+
+
+import hashlib  # noqa: E402
+
+from wine_crew import flow as flow_module  # noqa: E402
+from wine_crew.tools import crewai_tools as ct  # noqa: E402
+
+
+def _snapshot(root):
+    """sha256 of every file under root (relative path -> digest)."""
+    root = Path(root)
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+@pytest.fixture
+def promoted(flow_config, capsys):
+    """artifacts/ after one passing run, and its snapshot."""
+    assert run_flow(flow_config, stub_analyst(), stub_scientist()) == 0
+    capsys.readouterr()
+    for log in Path(flow_config["paths"]["logs"]).glob("run_*"):
+        log.unlink()                                   # later checks look at the next run only
+    art = Path(flow_config["paths"]["run_summary"]).parent
+    return art, _snapshot(art)
+
+
+def test_passing_run_promotes_and_cleans_up(flow_config, promoted):
+    art, snap = promoted
+    assert {"analyst/.gitkeep", "scientist/.gitkeep", "run_summary.json",
+            "analyst/clean_data.csv", "scientist/model.pkl", "scientist/value_ranking.csv"} <= set(snap)
+    staging = Path(flow_config["paths"]["staging_root"])
+    assert not staging.exists() or list(staging.iterdir()) == []      # the run folder was removed
+    assert all("build" not in str(root) for root in ct.WRITE_ROOTS)    # write access closed again
+    assert _summary(flow_config)["artifacts"]["clean_csv"].endswith("artifacts/analyst/clean_data.csv")
+
+
+def _assert_artifacts_unchanged(flow_config, art, snap, code, check):
+    assert code == 1
+    assert _snapshot(art) == snap                                      # byte-identical
+    failed = _failed_summary(flow_config)
+    assert failed["failed_check"] == check
+    staging_dir = Path(flow_config["paths"]["staging_root"]) / failed["run_id"]
+    assert staging_dir.is_dir() and failed["staging_dir"].endswith(failed["run_id"])
+    return failed
+
+
+@pytest.mark.parametrize("make_run, check", [
+    (lambda: (stub_analyst(_edit_clean(lambda d: d.drop(columns=["price"]))), stub_scientist()), "contract"),
+    (lambda: (stub_analyst(), stub_scientist(_edit_features(lambda d: d.assign(taster_name="x")))), "features"),
+    (lambda: (stub_analyst(), stub_scientist(_worse_than_baseline)), "model"),
+    (lambda: (lambda config: (_ for _ in ()).throw(RuntimeError("boom")), stub_scientist()), "crew1"),
+])
+def test_failed_run_leaves_artifacts_byte_identical(flow_config, promoted, capsys, make_run, check):
+    art, snap = promoted
+    analyst, scientist = make_run()
+    code = run_flow(flow_config, analyst, scientist)
+    _assert_artifacts_unchanged(flow_config, art, snap, code, check)
+    assert "artifacts/ was not changed" in capsys.readouterr().err
+
+
+def test_preflight_failure_leaves_artifacts_byte_identical(flow_config, promoted):
+    art, snap = promoted
+    os.remove(flow_config["paths"]["raw_csv"])
+    _assert_artifacts_unchanged(flow_config, art, snap, run_flow(flow_config, stub_analyst(), stub_scientist()),
+                                "preflight")
+
+
+@pytest.mark.parametrize("fail_on_call", [1, 2, 3, 4])
+def test_promotion_failure_rolls_back_both_folders(flow_config, promoted, monkeypatch, fail_on_call):
+    """os.replace calls: 1 analyst->backup, 2 staged analyst->artifacts, 3 scientist->backup,
+    4 staged scientist->artifacts. Failing 3 or 4 happens after analyst was already replaced."""
+    art, snap = promoted
+    real_replace, calls = os.replace, {"n": 0}
+
+    def flaky_replace(src, dst):
+        calls["n"] += 1
+        if calls["n"] == fail_on_call:
+            raise OSError("simulated failure")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(flow_module.os, "replace", flaky_replace)
+    code = run_flow(flow_config, stub_analyst(), stub_scientist())
+    failed = _assert_artifacts_unchanged(flow_config, art, snap, code, "promote")
+    assert "simulated failure" in failed["error"]
+    staging_dir = Path(flow_config["paths"]["staging_root"]) / failed["run_id"]
+    assert (staging_dir / "analyst" / "clean_data.csv").exists()          # staged files are back
+    assert (staging_dir / "scientist" / "model.pkl").exists()
+
+
+# --------------------------------------------------------------------------- demo failures
+
+
+@pytest.mark.parametrize("gate, message", [
+    ("contract", "Contract check failed: missing column: price"),
+    ("features", "Feature check failed: taster_name is a leakage column"),
+    ("model", "Model check failed: MAE"),
+])
+def test_demo_failure_stops_at_its_gate_without_touching_artifacts(flow_config, promoted, capsys, gate, message):
+    art, snap = promoted
+    code = run_flow(flow_config, stub_analyst(), stub_scientist(), demo_fail=gate)
+    failed = _assert_artifacts_unchanged(flow_config, art, snap, code, gate)
+    assert failed["error"].startswith(message) and failed["demo_fail"] == gate
+    log = _log_text(flow_config)
+    assert f"DEMO: this run will fail at gate {gate} on purpose" in log and "(staging folder only)" in log
+    assert message in capsys.readouterr().err
+
+
+def test_unknown_demo_failure_is_rejected(flow_config):
+    with pytest.raises(ValueError, match="unknown demo failure"):
+        run_flow(flow_config, stub_analyst(), stub_scientist(), demo_fail="nope")
+
+
+def test_cli_flags(monkeypatch, tmp_path):
+    from wine_crew import main as main_module
+
+    seen = {}
+    monkeypatch.setattr(main_module, "run_flow", lambda config=None, demo_fail=None: seen.update(
+        raw=config["paths"]["raw_csv"], demo=demo_fail) or 1)
+    assert main_module.main(["--demo-fail", "features", "--raw", str(tmp_path / "x.csv")]) == 1
+    assert seen == {"raw": str(tmp_path / "x.csv"), "demo": "features"}
+    assert main_module.main([]) == 1 and seen["demo"] is None
+
+
+def test_requests_by_task_are_logged_and_summarized(flow_config):
+    by_task = {"clean_task": {"requests": 2, "guardrail_retries": 0},
+               "insights_task": {"requests": 4, "guardrail_retries": 1}}
+    analyst = stub_analyst()
+
+    def counted(config):
+        return {**analyst(config), "requests_by_task": by_task}
+
+    assert run_flow(flow_config, counted, stub_scientist()) == 0
+    assert _summary(flow_config)["crews"]["crew1"]["requests_by_task"] == by_task
+    assert "crew1 requests by task: clean_task=2 insights_task=4 (guardrail retries 1)" in _log_text(flow_config)

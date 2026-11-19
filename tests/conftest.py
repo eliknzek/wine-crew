@@ -106,3 +106,19 @@ def model_df():
         ))
     raw = pd.DataFrame(rows, columns=RAW_COLUMNS)
     return clean_data(raw, load_config())[0]
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _keep_wine_crew_loaded():
+    """AppTest runs the app in this process; record the current code fingerprint so the app's
+    reload_if_changed does not evict wine_crew.* under the other tests (which would leave
+    them holding old class objects). Eviction itself is tested with a fake package."""
+    import sys
+
+    from wine_crew.config import REPO_ROOT
+
+    sys.path.insert(0, str(REPO_ROOT / "app"))
+    import code_reload
+
+    setattr(sys, code_reload._STATE_ATTR, code_reload.code_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    yield

@@ -141,3 +141,46 @@ def test_title_is_hebrew_and_page_title_stays(app):
 
 def test_analysis_tab_shows_hebrew_country_names(app):
     assert any("אוסטריה (Austria)" in m.value for m in app.markdown)
+
+
+def test_new_artifacts_load_without_clearing_the_cache(tmp_path, monkeypatch):
+    """A changed run_summary.json shows up on the next run (the cache key is the file fingerprint)."""
+    import json
+    import shutil
+    import sys
+    import time
+
+    import wine_crew.config as cfg_module
+
+    sys.path.insert(0, str(REPO_ROOT / "app"))
+    import code_reload
+
+    # Record the current code fingerprint so the app does not evict our patched module.
+    setattr(sys, code_reload._STATE_ATTR, code_reload.code_fingerprint(REPO_ROOT / "src" / "wine_crew"))
+    art = tmp_path / "artifacts"
+    shutil.copytree(REPO_ROOT / "artifacts", art)
+    config = load_config()
+    config["paths"] = {**config["paths"],
+                       **{k: str(art / v.removeprefix("artifacts/")) for k, v in config["paths"].items()
+                          if isinstance(v, str) and v.startswith("artifacts/")},
+                       "artifacts_analyst": str(art / "analyst"), "artifacts_scientist": str(art / "scientist")}
+    monkeypatch.setattr(cfg_module, "load_config", lambda path=None: config)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.run()
+    assert not at.exception, at.exception
+    old_id = json.loads((art / "run_summary.json").read_text())["run_id"]
+    assert any(old_id in m.value for m in at.markdown)
+
+    summary_path = art / "run_summary.json"
+    summary = json.loads(summary_path.read_text())
+    summary["run_id"] = "20990101-000000-abcdef"
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False))
+    later = time.time_ns() + 5_000_000_000
+    import os
+
+    os.utime(summary_path, ns=(later, later))
+    at.run()
+    assert not at.exception, at.exception
+    assert any("20990101-000000-abcdef" in m.value for m in at.markdown)

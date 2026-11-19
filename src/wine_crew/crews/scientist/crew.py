@@ -20,7 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from wine_crew.config import load_config, resolve_path
-from wine_crew.crews.common import make_files_guardrail, make_llm, strip_fences  # loads .env first
+from wine_crew.crews.common import (  # loads .env first
+    AGENT_MAX_ITER,
+    RequestCounter,
+    make_files_guardrail,
+    make_llm,
+    strip_fences,
+)
 
 from crewai import Agent, Crew, Process, Task  # noqa: E402
 from crewai.project import CrewBase, agent, crew, task  # noqa: E402
@@ -128,7 +134,6 @@ class ScientistCrew:
         self.config = config if config is not None else load_config()
         self.paths = scientist_paths(self.config, out_dir, clean_csv, contract_json)
         self.verbose = verbose
-        self.llm = make_llm(self.config)
 
     def inputs(self) -> dict[str, str]:
         # The placeholder goes in as an input: written literally in tasks.yaml,
@@ -137,20 +142,25 @@ class ScientistCrew:
                 "metrics_table_placeholder": METRICS_TABLE_PLACEHOLDER}
 
     def _agent(self, name: str, tools: list) -> Agent:
-        return Agent(config=self.agents_config[name], tools=tools, llm=self.llm,
-                     allow_delegation=False, verbose=self.verbose)
+        # A separate LLM object per agent: CrewAI's crew.token_usage adds every agent's
+        # llm usage, so a shared object would be counted once per agent (4x).
+        return Agent(config=self.agents_config[name], tools=tools, llm=make_llm(self.config),
+                     allow_delegation=False, max_iter=AGENT_MAX_ITER, verbose=self.verbose)
 
     @agent
     def contract_validator(self) -> Agent:
-        return self._agent("contract_validator", [ct.ValidateContractTool(config=self.config)])
+        # result_as_answer: the tool output is the task answer (one LLM call saved). The
+        # guardrails of these three tasks read files, not the answer text.
+        return self._agent("contract_validator", [ct.ValidateContractTool(config=self.config,
+                                                                          result_as_answer=True)])
 
     @agent
     def feature_engineer(self) -> Agent:
-        return self._agent("feature_engineer", [ct.BuildFeaturesTool(config=self.config)])
+        return self._agent("feature_engineer", [ct.BuildFeaturesTool(config=self.config, result_as_answer=True)])
 
     @agent
     def model_trainer(self) -> Agent:
-        return self._agent("model_trainer", [ct.TrainModelsTool(config=self.config)])
+        return self._agent("model_trainer", [ct.TrainModelsTool(config=self.config, result_as_answer=True)])
 
     @agent
     def model_card_writer(self) -> Agent:
@@ -197,8 +207,10 @@ def run_scientist(config: dict[str, Any] | None = None, out_dir: str | Path | No
     scientist = ScientistCrew(config=config, out_dir=out_dir, clean_csv=clean_csv,
                               contract_json=contract_json, verbose=verbose)
     card_path = ct._safe_output_path(scientist.paths["model_card"])
+    crew = scientist.crew()
     start = time.monotonic()
-    result = scientist.crew().kickoff(inputs=scientist.inputs())
+    with RequestCounter() as counter:
+        result = crew.kickoff(inputs=scientist.inputs())
     seconds = time.monotonic() - start
 
     outputs = {t.name or str(i): t.raw for i, t in enumerate(result.tasks_output)}
@@ -213,6 +225,8 @@ def run_scientist(config: dict[str, Any] | None = None, out_dir: str | Path | No
         "paths": scientist.inputs(),
         "task_outputs": outputs,
         "token_usage": usage.model_dump() if usage is not None else None,
+        "usage": counter.totals(),                      # counted from OpenAI's per-call usage
+        "requests_by_task": counter.by_task(crew.tasks),
     }
 
 

@@ -14,6 +14,7 @@ paths:
   eda_report: artifacts/analyst/eda_report.html
   insights: artifacts/analyst/insights.md
   run_summary: artifacts/run_summary.json
+  staging_root: build/runs        # each run writes here first; promoted to artifacts/ only if every gate passed
   contract_check: artifacts/scientist/contract_check.json
   features_csv: artifacts/scientist/features.csv
   model_pkl: artifacts/scientist/model.pkl
@@ -62,7 +63,11 @@ eda:
 llm:
   model: gpt-4o-mini
   temperature: 0
-  price_per_million:            # USD, gpt-4o-mini list price; used for the run cost in the log
+  # USD per 1M tokens for gpt-4o-mini, standard tier: OpenAI API pricing page
+  # (https://developers.openai.com/api/docs/pricing, "Flagship models" table), checked 2026-11-19.
+  # The run cost is computed from the counted tokens: (input - cached) x input + cached x
+  # cached_input + output x output.
+  price_per_million:
     input: 0.15
     cached_input: 0.075
     output: 0.60
