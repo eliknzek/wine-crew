@@ -16,7 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from wine_crew.config import load_config, resolve_path
-from wine_crew.crews.common import make_files_guardrail, make_llm, strip_fences  # loads .env first
+from wine_crew.crews.common import (  # loads .env first
+    AGENT_MAX_ITER,
+    RequestCounter,
+    make_files_guardrail,
+    make_llm,
+    strip_fences,
+)
 
 from crewai import Agent, Crew, Process, Task  # noqa: E402
 from crewai.project import CrewBase, agent, crew, task  # noqa: E402
@@ -86,18 +92,21 @@ class AnalystCrew:
 
     def _agent(self, name: str, tools: list) -> Agent:
         return Agent(config=self.agents_config[name], tools=tools, llm=self.llm,
-                     allow_delegation=False, verbose=self.verbose)
+                     allow_delegation=False, max_iter=AGENT_MAX_ITER, verbose=self.verbose)
 
     @agent
     def data_cleaner(self) -> Agent:
+        # result_as_answer on the last tool of a tool-only task: its JSON output is the task
+        # answer, which saves the final LLM call. Safe because these tasks' guardrails check
+        # files, not the answer text, and CrewAI never turns a failed tool call into the answer.
         return self._agent("data_cleaner", [ct.LoadRawTool(config=self.config),
-                                            ct.CleanDataTool(config=self.config)])
+                                            ct.CleanDataTool(config=self.config, result_as_answer=True)])
 
     @agent
     def eda_analyst(self) -> Agent:
         return self._agent("eda_analyst", [ct.EdaSummaryTool(config=self.config),
                                            ct.MakeChartsTool(config=self.config),
-                                           ct.BuildHtmlReportTool()])
+                                           ct.BuildHtmlReportTool(result_as_answer=True)])
 
     @agent
     def insights_writer(self) -> Agent:
@@ -106,7 +115,8 @@ class AnalystCrew:
     @agent
     def contract_author(self) -> Agent:
         return self._agent("contract_author", [ct.BuildContractTool(config=self.config),
-                                               ct.ValidateContractTool(config=self.config)])
+                                               ct.ValidateContractTool(config=self.config,
+                                                                       result_as_answer=True)])
 
     @task
     def clean_task(self) -> Task:
@@ -141,8 +151,10 @@ def run_analyst(config: dict[str, Any] | None = None, out_dir: str | Path | None
     """Run Crew 1 end to end. Writes insights.md only after the guardrail passed."""
     analyst = AnalystCrew(config=config, out_dir=out_dir, verbose=verbose)
     insights_path = ct._safe_output_path(analyst.paths["insights_md"])
+    crew = analyst.crew()
     start = time.monotonic()
-    result = analyst.crew().kickoff(inputs=analyst.inputs())
+    with RequestCounter() as counter:
+        result = crew.kickoff(inputs=analyst.inputs())
     seconds = time.monotonic() - start
 
     outputs = {t.name or str(i): t.raw for i, t in enumerate(result.tasks_output)}
@@ -157,6 +169,7 @@ def run_analyst(config: dict[str, Any] | None = None, out_dir: str | Path | None
         "paths": analyst.inputs(),
         "task_outputs": outputs,
         "token_usage": usage.model_dump() if usage is not None else None,
+        "requests_by_task": counter.by_task(crew.tasks),
     }
 
 

@@ -273,6 +273,13 @@ class WineFlow(Flow[WineState]):
         usage = result.get("token_usage") or {}
         cost = crew_cost(usage, self._config)
         self.state.crews[name] = {"seconds": result.get("seconds"), "tokens": usage, "cost_usd": cost}
+        by_task = result.get("requests_by_task")
+        if by_task:
+            self.state.crews[name]["requests_by_task"] = by_task
+            parts = [f"{task}={v['requests']}" + (f" (guardrail retries {v['guardrail_retries']})"
+                                                  if v.get("guardrail_retries") else "")
+                     for task, v in by_task.items()]
+            self._log.info(f"{name} requests by task: " + " ".join(parts))
         self._log.info(
             f"{name} tokens: total={usage.get('total_tokens', 0)} prompt={usage.get('prompt_tokens', 0)} "
             f"cached={usage.get('cached_prompt_tokens', 0)} completion={usage.get('completion_tokens', 0)} "

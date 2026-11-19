@@ -429,3 +429,16 @@ def test_cli_flags(monkeypatch, tmp_path):
     assert main_module.main(["--demo-fail", "features", "--raw", str(tmp_path / "x.csv")]) == 1
     assert seen == {"raw": str(tmp_path / "x.csv"), "demo": "features"}
     assert main_module.main([]) == 1 and seen["demo"] is None
+
+
+def test_requests_by_task_are_logged_and_summarized(flow_config):
+    by_task = {"clean_task": {"requests": 2, "guardrail_retries": 0},
+               "insights_task": {"requests": 4, "guardrail_retries": 1}}
+    analyst = stub_analyst()
+
+    def counted(config):
+        return {**analyst(config), "requests_by_task": by_task}
+
+    assert run_flow(flow_config, counted, stub_scientist()) == 0
+    assert _summary(flow_config)["crews"]["crew1"]["requests_by_task"] == by_task
+    assert "crew1 requests by task: clean_task=2 insights_task=4 (guardrail retries 1)" in _log_text(flow_config)
