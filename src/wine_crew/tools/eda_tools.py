@@ -177,6 +177,7 @@ def eda_summary(clean_df: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
             "top_country": str(country_share.index[0]),
             "top_country_share_pct": _r(country_share.iloc[0], 2),
             "top3_share_pct": _r(country_share.iloc[:3].sum(), 2),
+            "top3_countries": [str(c) for c in country_share.index[:3]],
             "shares_pct": {str(k): _r(v, 2) for k, v in country_share.iloc[: eda["top_n"]].items()},
         },
     }
@@ -243,12 +244,35 @@ FORBIDDEN_PHRASES = {
 VALUE_SUBHEADINGS = ["### מדינות", "### זנים"]
 MISSING_TERMS = ["נתוני אזור", "שם הסדרה/היין"]
 PLATEAU_PHRASE = "כל הכפלה של המחיר מוסיפה רק"
+# Fixed lines of the insights.md templates (crews/analyst/tasks.yaml); the style check
+# requires each one, and checks every number in them against the summary.
+OPENING_LINE = "- הניקוד עולה עם המחיר, אבל ככל שהמחיר גבוה יותר העלייה קטנה."
+VALUE_DEFINITION = re.compile(
+    r"נכללו מדינות וזנים שהניקוד החציוני שלהם הוא (\d+) ומעלה והמחיר החציוני שלהם הוא \$(\d+) ומטה\. "
+    r"אלה הניקוד החציוני והמחיר החציוני של כלל היינות\.")
+BIAS_LINE = re.compile(
+    r"- (\d+)% מהיינות בנתונים הם מ-(.+?), ו-(\d+)% מגיעים משלוש המדינות המובילות: (.+?)\.(?:\n|$)")
+MISSING_LINE = re.compile(
+    r"- ערכים חסרים: ל-(\d+)% מהיינות חסרים נתוני אזור, ול-(\d+)% חסר שם הסדרה/היין\.")
+RECOMMEND_COUNTRIES = "- מדינות שכדאי להתחיל מהן: "
+RECOMMEND_VARIETIES = "- זנים שכדאי להתחיל מהם: "
 
 
 def _price(x: float) -> str:
     return f"${x:g}"
 _TRAILING_ZERO = re.compile(r"(?<![\d.])\d+\.0(?!\d)")
 _LONG_PERCENT = re.compile(r"(?<![\d.])\d+\.\d{2,}\s*%")
+
+
+def _is_rounding(written: str, value: Any) -> bool:
+    """True if the whole number written is value rounded (either way at exactly .5)."""
+    return value is not None and abs(int(written) - float(value)) <= 0.5
+
+
+def hebrew_join(names: list[str], bold: bool = False) -> str:
+    """'A', 'A ו-B', 'A, B ו-C' (optionally each name in **bold**)."""
+    items = [f"**{n}**" if bold else n for n in names]
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " ו-" + items[-1]
 
 
 def _section(text: str, heading: str) -> str:
@@ -307,11 +331,67 @@ def insight_style_violations(text: str, summary: dict[str, Any]) -> list[str]:
                 out.append(f"section '{INSIGHT_HEADINGS[idx]}' must use the template "
                            f"'{expected}, {PLATEAU_PHRASE} <gain> נקודות'")
 
+    out += _template_line_violations(text, summary)
+
     allowed ={r["name"] for r in summary.get("value_countries", []) + summary.get("value_varieties", [])}
     candidates = [r["name"] for r in summary.get("by_country", []) + summary.get("by_variety", [])]
     for name in _names_in(value_section, candidates + sorted(allowed)):
         if name not in allowed:
             out.append(f"{name} is not in value_countries or value_varieties; name only those")
+    return out
+
+
+def _template_line_violations(text: str, summary: dict[str, Any]) -> list[str]:
+    """The fixed template lines: each must be present, and its numbers and names must match."""
+    out: list[str] = []
+    h1, h2, h3, h4 = (_section(text, h) for h in INSIGHT_HEADINGS)
+
+    if OPENING_LINE not in h1:
+        out.append(f"section 1 must start with the line '{OPENING_LINE}'")
+
+    match = VALUE_DEFINITION.search(h2)
+    if not match:
+        out.append("section 2 must use the definition template 'נכללו מדינות וזנים שהניקוד החציוני שלהם הוא ...'")
+    elif ("overall_median_points" in summary and "overall_median_price" in summary
+          and not (_is_rounding(match.group(1), summary["overall_median_points"])
+                   and _is_rounding(match.group(2), summary["overall_median_price"]))):
+        out.append("the section 2 definition must use overall_median_points and overall_median_price, rounded")
+
+    bias = summary.get("country_bias", {})
+    if bias.get("top3_countries"):
+        match = BIAS_LINE.search(h3)
+        expected_names = hebrew_join(bias["top3_countries"])
+        if not match:
+            out.append("section 3 must use the template '- <top_country_share_pct>% מהיינות בנתונים הם מ-"
+                       "<top_country>, ו-<top3_share_pct>% מגיעים משלוש המדינות המובילות: <top3_countries>.'")
+        else:
+            if not _is_rounding(match.group(1), bias.get("top_country_share_pct")):
+                out.append(f"the section 3 share of {bias.get('top_country')} must be "
+                           "top_country_share_pct rounded to a whole number")
+            if match.group(2) != bias.get("top_country"):
+                out.append(f"section 3 must name the top country as {bias.get('top_country')}")
+            if not _is_rounding(match.group(3), bias.get("top3_share_pct")):
+                out.append("the section 3 share of the top three must be top3_share_pct rounded to a whole number")
+            if match.group(4) != expected_names:
+                out.append(f"section 3 must list the top three countries as '{expected_names}'")
+
+    match = MISSING_LINE.search(h3)
+    missing = summary.get("missing_pct", {})
+    if not match:
+        out.append("section 3 must use the template '- ערכים חסרים: ל-<region_1>% מהיינות חסרים נתוני אזור, "
+                   "ול-<designation>% חסר שם הסדרה/היין.'")
+    elif missing and not (_is_rounding(match.group(1), missing.get("region_1"))
+                          and _is_rounding(match.group(2), missing.get("designation"))):
+        out.append("the missing-values line must use missing_pct.region_1 and missing_pct.designation, rounded")
+
+    for prefix, key in ((RECOMMEND_COUNTRIES, "value_countries"), (RECOMMEND_VARIETIES, "value_varieties")):
+        line = next((ln.rstrip() for ln in h4.splitlines() if ln.startswith(prefix)), None)
+        names = [r["name"] for r in summary.get(key, [])][:2]
+        if line is None:
+            out.append(f"section 4 must include the line '{prefix}...'")
+        elif names and line != f"{prefix}{hebrew_join(names, bold=True)}.":
+            out.append(f"section 4 must read '{prefix}{hebrew_join(names, bold=True)}.' "
+                       f"(the first two entries of {key})")
     return out
 
 

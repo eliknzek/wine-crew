@@ -39,6 +39,9 @@ def test_eda_summary_contents(model_df, eda_config):
     assert s["by_vintage"] and all(r["count"] >= 5 for r in s["by_vintage"])
     assert set(s["missing_pct"]) == set(model_df.columns)
     assert 0 < s["country_bias"]["top_country_share_pct"] <= 100
+    shares = s["country_bias"]["shares_pct"]
+    assert s["country_bias"]["top3_countries"] == list(shares)[:3]
+    assert s["country_bias"]["top3_share_pct"] == pytest.approx(sum(list(shares.values())[:3]), abs=0.02)
     assert s["corr_points_log_price"] > 0.5  # the sample is built with points rising in log price
     # Explicit fields the insights templates read.
     assert isinstance(s["overall_median_points"], float)

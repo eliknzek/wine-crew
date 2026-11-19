@@ -147,6 +147,7 @@ def run_analyst(config: dict[str, Any] | None = None, out_dir: str | Path | None
 
     outputs = {t.name or str(i): t.raw for i, t in enumerate(result.tasks_output)}
     insights = strip_fences(result.tasks_output[2].raw)
+    insights = "\n".join(line.rstrip() for line in insights.splitlines())   # no trailing spaces
     insights_path.parent.mkdir(parents=True, exist_ok=True)
     insights_path.write_text(insights + "\n", encoding="utf-8")
 
