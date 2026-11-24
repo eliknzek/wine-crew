@@ -457,3 +457,69 @@ def test_usage_cost_uses_the_flow_formula():
     usage = {"input_tokens": 1_000_000, "cached_input_tokens": 200_000, "output_tokens": 100_000}
     expected = (800_000 * prices["input"] + 200_000 * prices["cached_input"] + 100_000 * prices["output"]) / 1e6
     assert som.usage_cost(usage, prices) == pytest.approx(expected)
+
+
+# --------------------------------------------------------------------------- red wine: no rosé
+
+def test_rose_pattern_matches_whole_words_only():
+    import pandas as pd
+
+    frame = pd.DataFrame({"title": ["Marrenon 2014 Les Grains Rosé de Merlot (Mediterranée)", "X 2015 Rosato",
+                                    "Y 2016 ROSADO", "Z 2014 Rose of Pinot", "Carneros 2012 Pinot",
+                                    "Barossa 2010 Shiraz", "Rosso di Montalcino", "Montrose 2011"],
+                          "variety": ["Merlot", "Sangiovese", "Garnacha", "Pinot Noir", "Pinot Noir",
+                                      "Shiraz", "Sangiovese", "Cabernet"]})
+    kept = list(som.drop_rose(frame)["title"])
+    assert kept == ["Carneros 2012 Pinot", "Barossa 2010 Shiraz", "Rosso di Montalcino", "Montrose 2011"]
+    by_variety = pd.DataFrame({"title": ["W 2015 Estate"], "variety": ["Rosé"]})
+    assert som.drop_rose(by_variety).empty
+
+
+@needs_artifacts
+def test_exclude_rose_drops_marrenon_and_the_like_and_keeps_them_without_it(tools):
+    marrenon = "Marrenon 2014 Les Grains Rosé de Merlot (Mediterranée)"
+    args = {"max_price": 30, "countries": ["France"], "varieties": ["Merlot"], "limit": 10}
+    with_rose = tools.call("find_value_wines", args)
+    without = tools.call("find_value_wines", {**args, "exclude_rose": True})
+    assert marrenon in [w["title"] for w in with_rose["wines"]]
+    assert marrenon not in [w["title"] for w in without["wines"]]
+    assert not any(som.ROSE.search(w["title"]) or som.ROSE.search(w["variety"]) for w in without["wines"])
+    assert without["matching_wines"] < with_rose["matching_wines"] and without["filters"]["exclude_rose"]
+    similar = tools.call("similar_wines", {"country": "France", "variety": "Merlot", "price": 12, "exclude_rose": True})
+    assert marrenon not in [w["title"] for w in similar["wines"]]
+    assert marrenon in [w["title"] for w in tools.call(
+        "similar_wines", {"country": "France", "variety": "Merlot", "price": 12})["wines"]]
+
+
+@needs_artifacts
+def test_red_wine_answer_says_the_color_comes_from_the_variety(tools):
+    assert 'exclude_rose=true' in som.SYSTEM_PROMPT and som.COLOR_NOTE in som.SYSTEM_PROMPT
+    reply = som.ask(som.DemoClient(), som.SAMPLE_QUESTIONS[0], [], tools, model="demo")
+    assert reply.ok and reply.text.endswith(som.COLOR_NOTE) and "Rosé" not in reply.text   # added by ask()
+
+
+@needs_artifacts
+def test_exclude_rose_without_varieties_asks_for_varieties_instead_of_returning_any_color(tools):
+    result = tools.call("find_value_wines", {"max_price": 30, "countries": ["France"], "exclude_rose": True})
+    assert "wines" not in result and "varieties" in result["error"]
+    assert "Bordeaux-style Red Blend" in result["error"] and "Rosé" not in result["error"]
+
+
+def test_color_note_is_added_once_only_for_color_questions_with_a_wine_search():
+    note = som.COLOR_NOTE
+    assert som.with_color_note("יין אדום מצרפת עד $30", "רשימה", ["find_value_wines"]).endswith("\n\n" + note)
+    assert som.with_color_note("יינות לבנים זולים", "רשימה", ["find_value_wines"]).endswith(note)
+    assert som.with_color_note("a rosé please", "list", ["similar_wines"]).endswith(note)
+    assert som.with_color_note("יין מצרפת עד $30", "רשימה", ["find_value_wines"]) == "רשימה"     # no color asked
+    assert som.with_color_note("מה זה יין אדום?", "הסבר", ["explain_term"]) == "הסבר"            # no wine search
+    assert som.with_color_note("יין אדום", f"רשימה\n\n{note}", ["find_value_wines"]).count(note) == 1
+
+
+@needs_artifacts
+def test_red_request_from_the_model_gets_the_color_line_and_no_rose(tools):
+    args = {"max_price": 30, "countries": ["France"], "varieties": ["Merlot", "Syrah"], "exclude_rose": True}
+    client = FakeClient(calls(("find_value_wines", args)),
+                        lambda messages: text("הנה יינות אדומים:\n" + last_tool_result(messages)["wine_list"]))
+    state = som.new_state()
+    shown = run(state, som.SAMPLE_QUESTIONS[0], client, tools)
+    assert shown.endswith(som.COLOR_NOTE) and "Rosé" not in shown
