@@ -1,7 +1,8 @@
 """Streamlit app for wine-crew, in Hebrew (RTL).
 
-It only reads artifacts/ and model.pkl: it never runs the Flow and needs no API
-key. Run with:
+It only reads artifacts/ and model.pkl: it never runs the Flow. The site needs no API key;
+only Karmi, the chat assistant in the corner (app/karmi.py), uses one, and only when opened.
+Run with:
     streamlit run app/streamlit_app.py
 """
 
@@ -36,6 +37,7 @@ reload_if_changed(SRC / "wine_crew", clear_caches=_clear_caches)   # also app/ch
 
 from wine_crew import app_data as ad  # noqa: E402
 import charts  # noqa: E402  (app/charts.py: altair charts for the dashboard tabs)
+import karmi  # noqa: E402  (app/karmi.py: the floating chat assistant)
 from wine_crew.config import load_config, resolve_path  # noqa: E402
 
 # Favicon: a line wine glass drawn for the app (PNG: page_icon does not take SVG). No emoji.
@@ -219,7 +221,7 @@ metrics = data["metrics"]
 
 with st.container(key="hero"):
     st.title("ניקוד יינות ויינות ששווים את מחירם")   # the glass icon is added in style.css
-    st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow. האפליקציה לא מריצה מודלי שפה.")
+    st.caption("wine-crew · כל המספרים מגיעים מתוצרי הריצה האחרונה של ה-Flow, ולא ממודל שפה.")
     st.markdown(INTRO)
     st.html(DIVIDER)
 
@@ -583,3 +585,19 @@ with how_tab:
                     st.markdown(data["evaluation_report"])
 
 st.html(FOOTER)
+
+
+def _karmi_data():
+    """What Karmi's tools read: the same artifacts as the tabs (cached loaders)."""
+    from wine_crew import sommelier
+
+    return sommelier.Data(model=_model(ad.file_fingerprint([ad.model_file(config)])), metrics=metrics,
+                          ranking=ranking, band=band, eda=data["eda_summary"], insights=data["insights"],
+                          contract=data["contract"], vintage_range=ad.vintage_range(config),
+                          price_edges=tuple(config["eda"]["price_bands"]))
+
+
+# Outside the tabs, so the button floats over every tab (style.css places it bottom-left).
+karmi.render(_karmi_data, ad.file_fingerprint([*ad.data_files(config).values(), ad.model_file(config),
+                                                resolve_path(config, "value_ranking")]),
+             config["llm"], APP_DIR.parent / ".env")

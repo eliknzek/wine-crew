@@ -2,6 +2,7 @@
 # because it sits next to the entrypoint, app/streamlit_app.py).
 # Versions are the same as in the main requirements.txt. No crewai: the app only reads
 # artifacts/ and model.pkl. wine_crew is not installed; the app adds src/ to sys.path.
+# openai is for Karmi, the chat assistant (imported only when its panel is opened).
 streamlit==1.67.0
 pandas==3.1.1
 numpy==2.5.4
@@ -9,3 +10,4 @@ scikit-learn==1.9.1        # model.pkl was trained with 1.9.1; keep it identical
 joblib==1.6.0
 pyyaml==6.0.3              # config.yaml
 altair==6.3.0              # not imported by the app; pinned to the main lock (streamlit installs it)
+openai==2.54.0             # Karmi (function calling); the key comes from st.secrets on Cloud

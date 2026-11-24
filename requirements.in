@@ -7,6 +7,7 @@ scikit-learn
 matplotlib
 pyyaml
 python-dotenv
+openai          # Karmi, the app's chat assistant (also pulled in by crewai)
 joblib
 kaggle
 streamlit

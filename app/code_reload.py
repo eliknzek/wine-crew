@@ -14,7 +14,8 @@ from pathlib import Path
 PACKAGE = "wine_crew"
 # Helper modules in app/ that import wine_crew: a running server does not reload them either,
 # and they keep a reference to the old wine_crew, so they are reloaded together with it.
-APP_MODULES = {"charts": Path(__file__).resolve().parent / "charts.py"}
+APP_MODULES = {"charts": Path(__file__).resolve().parent / "charts.py",
+               "karmi": Path(__file__).resolve().parent / "karmi.py"}
 # Kept on the sys module so it survives a reload of this module too.
 _STATE_ATTR = "_wine_crew_code_fingerprint"
 
