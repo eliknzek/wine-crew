@@ -113,17 +113,32 @@ def _choices(block: dict, index: int, active: bool) -> None:
                      on_change=_send_other, args=(index, sends), label_visibility="collapsed")
 
 
-def _bubble(role: str, text: str, blocks: list | None = None, index: int = -1, active: bool = False) -> None:
+def _markdown(text: str) -> None:
+    # "$" starts LaTeX in Streamlit markdown ("$20 ... $30" would turn into math).
+    st.markdown(som.display_text(text).replace("$", "\\$"))
+
+
+def _bubble(role: str, text: str, blocks: list | None = None, index: int = -1, active: bool = False,
+            item: dict | None = None) -> None:
+    """A message. With cards or choices, in this order: the opening, the color note (if any), the
+    cards / buttons, then the closing."""
     with st.chat_message(role, avatar=str(FACE) if role == "assistant" else None):
-        # "$" starts LaTeX in Streamlit markdown ("$20 ... $30" would turn into math).
-        st.markdown(som.display_text(text).replace("$", "\\$"))
-        for block in blocks or []:
+        if not blocks:
+            _markdown(text)
+            return
+        item = item or {}
+        _markdown(item.get("intro") or text)
+        if item.get("note"):
+            _markdown(item["note"])
+        for block in blocks:
             if block["type"] == "wines":
                 st.html(wine_cards_html(block["wines"]))
             elif block["type"] == "prediction":
                 st.html(prediction_card_html(block))
             elif block["type"] == "choices":
                 _choices(block, index, active)
+        if item.get("outro"):
+            _markdown(item["outro"])
 
 
 # Karmi's 4-second loop (VP9 WebM, no audio) at the top of the panel, over the still image
@@ -165,7 +180,7 @@ def _panel(load_data: Callable[[], som.Data], fingerprint: tuple, llm: dict, env
         _bubble("assistant", som.WELCOME)
         last = len(state["shown"]) - 1
         for i, item in enumerate(state["shown"]):
-            _bubble(item["role"], item["text"], item["blocks"], i, active=i == last and not pending)
+            _bubble(item["role"], item["text"], item["blocks"], i, active=i == last and not pending, item=item)
     if not state["shown"] and not pending:
         with st.container(key="karmi_samples"):
             for i, sample in enumerate(som.SAMPLE_QUESTIONS):

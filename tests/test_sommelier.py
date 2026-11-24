@@ -650,3 +650,93 @@ def test_display_isolates_latin_extended_names():
 def test_prompt_keeps_color_requests_away_from_variety_buttons():
     rule = next(line for line in som.SYSTEM_PROMPT.splitlines() if line.startswith("10."))
     assert "ask_choice רק כשחסר" in rule and "אל תשאל על זן" in rule and "כלל 5" in rule
+
+
+
+# --------------------------------------------------------------------------- glossary, order, plural
+
+@pytest.mark.parametrize("term, key", [
+    ("ציון שווי", "ציון שווי"), ("ציון השווי", "ציון שווי"), ("value score", "ציון שווי"),
+    ("value_score", "ציון שווי"), ("Value-Score?", "ציון שווי"), ("MAE", "MAE"),
+    ("שגיאה ממוצעת", "MAE"), ("השגיאה הממוצעת", "MAE"), ("ניקוד צפוי", "ניקוד צפוי"),
+    ("הניקוד הצפוי", "ניקוד צפוי"), ("חציון", "חציון"), ("median", "חציון"),
+    ("out-of-fold", "out-of-fold"), ("out of fold", "out-of-fold"),
+])
+@needs_artifacts
+def test_every_form_of_a_term_returns_its_explanation(tools, term, key):
+    result = tools.call("explain_term", {"term": term})
+    assert result["term"] == key and result["explanation"] == ad.GLOSSARY[key]
+
+
+@needs_artifacts
+@pytest.mark.parametrize("word", [label for _, label in ad.SCORE_SCALE] + ["דרגות הניקוד", "סולם"])
+def test_score_words_return_the_rating_scale(tools, word):
+    result = tools.call("explain_term", {"term": word})
+    assert result["term"] == "דרגות הניקוד"
+    assert [(r["from_points"], r["label"]) for r in result["scale"]] == list(ad.SCORE_SCALE)
+
+
+@needs_artifacts
+def test_unknown_term_offers_the_available_terms_instead_of_no_explanation(tools):
+    result = tools.call("explain_term", {"term": "בננה"})
+    assert "error" not in result and result["available_terms"] == [*ad.GLOSSARY, "דרגות הניקוד"]
+    spec = next(t for t in som.Tools.SPECS if t["function"]["name"] == "explain_term")
+    assert spec["function"]["parameters"]["properties"]["term"]["enum"] == [*ad.GLOSSARY, "דרגות הניקוד"]
+    assert "available_terms" in som.SYSTEM_PROMPT
+
+
+@needs_artifacts
+@pytest.mark.parametrize("question", som.SAMPLE_QUESTIONS)
+def test_each_sample_question_gets_a_proper_demo_answer(tools, question):
+    reply = som.ask(som.DemoClient(), question, [], tools, model="demo")
+    assert reply.ok and reply.text != som.FALLBACK and "error" not in reply.text
+    assert "אין הסבר" not in reply.text and "לא מוכר" not in reply.text
+
+
+def test_answer_is_split_around_the_cards():
+    assert som.split_around_cards("מצאתי 12 יינות. אלה השווים ביותר:") == ("מצאתי 12 יינות. אלה השווים ביותר:", "")
+    assert som.split_around_cards("הנה כמה מהם:\nאם תרצו, שאלו עוד.") == ("הנה כמה מהם:", "אם תרצו, שאלו עוד.")
+    assert som.split_around_cards("הנה יינות.\n\nבתיאבון!") == ("הנה יינות.", "בתיאבון!")
+    assert som.split_around_cards("משפט אחד") == ("משפט אחד", "")
+
+
+@needs_artifacts
+def test_red_answer_order_is_opening_note_cards_closing(tools, app, monkeypatch):
+    client = FakeClient(calls(("find_value_wines", {"max_price": 30, "countries": ["France"],
+                                                     "varieties": ["Syrah"], "exclude_rose": True})),
+                        text("הנה כמה מהם:\nאם תרצו, אפשר לחפש גם בזנים אחרים."))
+    state = som.new_state()
+    run(state, som.SAMPLE_QUESTIONS[0], client, tools)
+    item = state["shown"][1]
+    assert (item["intro"], item["note"], item["outro"]) == ("הנה כמה מהם:", som.COLOR_NOTE,
+                                                            "אם תרצו, אפשר לחפש גם בזנים אחרים.")
+    monkeypatch.setenv(som.DEMO_ENV, "1")              # a client, so the panel shows the conversation
+    app.session_state["karmi_chat"] = True
+    app.session_state["karmi_state"] = state
+    app.run()
+    history = next(b for b, _ in _block(app, "karmi_history"))
+    message = [m for m in history.children.values() if getattr(m, "type", None) == "chat_message"][-1]
+    order = []
+    for child in message.children.values():
+        if getattr(child, "type", None) == "markdown":
+            order.append(child.value.replace("\\$", "$"))
+        elif getattr(child, "type", None) == "html" and "karmi-cards" in child.proto.body:
+            order.append("CARDS")
+    assert order[0].endswith("הנה כמה מהם:") and som.COLOR_NOTE in order[1]
+    assert order[2] == "CARDS" and "אם תרצו" in order[3] and len(order) == 4
+
+
+def test_karmi_addresses_users_in_plural():
+    assert "בלשון רבים" in som.SYSTEM_PROMPT and '"אם תרצו"' in som.SYSTEM_PROMPT
+    texts = [som.WELCOME, som.PLACEHOLDER, som.NO_KEY, som.FALLBACK, som.LIMIT_REACHED, som.ERROR,
+             *som.SAMPLE_QUESTIONS, som.DemoClient._write("ask_choice", {"field": "variety"}),
+             som.DemoClient._write("ask_choice", {"field": "budget"})]
+    singular = re.compile(r"\b(?:תרצה|תבחר|שאל |אתה |תוכל|לך )")
+    assert not [t for t in texts if singular.search(t)]
+
+
+def test_mobile_history_takes_most_of_the_screen():
+    css = (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")
+    mobile = css[css.index("@media (max-width: 640px)"):]
+    assert "calc(100vh - 370px)" in mobile and "st-key-karmi_history" in mobile
+    assert "max-height: calc(100vh - 140px)" in mobile                       # under the top bar

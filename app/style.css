@@ -512,6 +512,13 @@
   /* Karmi: 56px in the corner; the panel almost the full width of the screen. */
   .st-key-karmi { left: 12px; bottom: 12px; width: 56px !important; }
   .st-key-karmi button { width: 56px; height: 56px; }
-  .karmi-toast { flex-basis: 72px; height: 72px; }
+  .karmi-toast { flex-basis: 64px; height: 64px; }
+  /* Phones: the panel takes about 80% of the screen height and stays under the 60px top bar
+     (Streamlit would cap it lower), so two cards fit without scrolling; the history gets what the
+     header, input and counter leave. */
+  [data-testid="stPopoverBody"]:has(.st-key-karmi_panel) { max-height: calc(100vh - 140px) !important; }
+  [data-testid="stLayoutWrapper"]:has(> .st-key-karmi_history) {
+    flex-basis: max(150px, calc(100vh - 370px)) !important; height: max(150px, calc(100vh - 370px)) !important;
+  }
   [data-testid="stMainBlockContainer"] { padding-bottom: 5.5rem; }
 }
