@@ -378,17 +378,20 @@ def test_css_turns_every_karmi_animation_off_for_reduced_motion():
 
 # --------------------------------------------------------------------------- one real call (pytest -m llm)
 
+LOCAL_KEY = som.load_api_key(None, env_file=REPO_ROOT / ".env")   # environment, then a local .env
+
+
 @pytest.mark.llm
 @needs_artifacts
-@pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="needs OPENAI_API_KEY")
+@pytest.mark.skipif(not LOCAL_KEY, reason="needs OPENAI_API_KEY (environment or .env)")
 def test_real_model_answers_with_numbers_from_the_tools(tools):
-    from wine_crew.sommelier import make_client
-
-    client = make_client(os.environ["OPENAI_API_KEY"], environ={})
+    client = som.make_client(LOCAL_KEY, environ={})
     reply = som.ask(client, som.SAMPLE_QUESTIONS[1], [], tools, model=CONFIG["llm"]["model"],
                     temperature=CONFIG["llm"]["temperature"])
     assert reply.ok, reply.text
     assert "predict_score" in reply.tools_used
+    print("\nanswer:", reply.text, "\nusage:", reply.usage,
+          f"\ncost: ${som.usage_cost(reply.usage, CONFIG['llm']['price_per_million']):.6f}")
 
 
 def test_display_isolates_latin_names_and_signed_numbers_only_for_display():
@@ -397,3 +400,60 @@ def test_display_isolates_latin_names_and_signed_numbers_only_for_display():
     assert "⁨Château Marsau 2012  Blaye Côtes de Bordeaux⁩" in shown
     assert "⁦+5.6⁩" in shown and "ל-89" in shown           # "ל-89" is not a signed number
     assert som.answer_number_violations(raw, [2012, 18, 92, 5.6, 84, 89]) == []
+
+
+def test_wine_lists_are_two_lines_name_then_details_in_a_fixed_order():
+    wines = [{"title": "Château Blaignan 2010  Médoc", "details": som.wine_details(92, 16.0, 5.5123)}]
+    assert wines[0]["details"] == "ניקוד 92 · $16 · ציון שווי +5.5"
+    listed = som.wine_list(wines)
+    assert listed == "- Château Blaignan 2010  Médoc\n  ניקוד 92 · $16 · ציון שווי +5.5"
+    shown = som.display_text(listed)
+    name_line, details_line = shown.split("\n")
+    assert name_line == "- ⁦Château Blaignan 2010  Médoc⁩  "     # one LTR unit, then a line break
+    assert details_line == "  ניקוד 92 · $16 · ציון שווי ⁦+5.5⁩"
+    assert "9. כשאתה מציג יינות, העתק את השדה wine_list" in som.SYSTEM_PROMPT
+
+
+@needs_artifacts
+def test_value_tool_returns_the_ready_two_line_list(tools):
+    result = tools.call("find_value_wines", {"max_price": 30, "limit": 2})
+    lines = result["wine_list"].split("\n")
+    assert len(lines) == 4 and lines[0] == f"- {result['wines'][0]['title']}"
+    assert lines[1] == "  " + result["wines"][0]["details"]
+    assert re.fullmatch(r"  ניקוד \d+ · \$\d+ · ציון שווי [+-]\d+\.\d", lines[1])
+
+
+# --------------------------------------------------------------------------- Karmi's video
+
+VIDEO = REPO_ROOT / "app" / "static" / "karmi-loop.webm"
+
+
+def test_karmi_video_is_a_small_silent_vp9_webm_used_by_the_panel():
+    data = VIDEO.read_bytes()
+    assert data[:4] == b"\x1a\x45\xdf\xa3" and b"webm" in data[:64]          # EBML header, DocType webm
+    assert b"V_VP9" in data
+    assert not any(codec in data for codec in (b"A_OPUS", b"A_VORBIS", b"A_AAC"))   # no audio track
+    assert len(data) <= 60 * 1024
+    source = (REPO_ROOT / "app" / "karmi.py").read_text(encoding="utf-8")
+    assert 'src="app/static/karmi-loop.webm"' in source and 'poster="app/static/karmi-toast.webp"' in source
+    for attribute in ("autoplay", "muted", "loop", "playsinline", 'media="(prefers-reduced-motion: no-preference)"'):
+        assert attribute in source
+    css = (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8")
+    reduced = css[css.index("@media (prefers-reduced-motion: reduce)"):]
+    assert ".karmi-video { display: none; }" in reduced[:reduced.index("\n}\n")]
+
+
+def test_video_is_not_in_the_page_until_the_panel_opens(app):
+    def has_video():
+        return any("karmi-loop.webm" in h.proto.body for h in app.get("html"))
+    assert not has_video()
+    app.session_state["karmi_chat"] = True
+    app.run()
+    assert has_video()
+
+
+def test_usage_cost_uses_the_flow_formula():
+    prices = CONFIG["llm"]["price_per_million"]
+    usage = {"input_tokens": 1_000_000, "cached_input_tokens": 200_000, "output_tokens": 100_000}
+    expected = (800_000 * prices["input"] + 200_000 * prices["cached_input"] + 100_000 * prices["output"]) / 1e6
+    assert som.usage_cost(usage, prices) == pytest.approx(expected)

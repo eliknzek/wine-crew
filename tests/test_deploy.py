@@ -63,8 +63,9 @@ def test_app_runs_without_crewai_env_or_clean_data():
 
 
 def test_static_images_are_small_webp_files_all_used_by_the_css():
-    """Every file in app/static/ is a real WebP, small for its place, and referenced in style.css
-    by a relative url (works under Cloud's path prefix); every such url points at a file."""
+    """Every file in app/static/ is a real WebP (or Karmi's WebM), small for its place, and
+    referenced by a relative url (works under Cloud's path prefix) in style.css or Karmi's <video>;
+    every such url points at a file."""
     import re
     import tomllib
 
@@ -73,12 +74,18 @@ def test_static_images_are_small_webp_files_all_used_by_the_css():
     assert "hero-cellar-barrels.webp" in files and "hero-vineyard.webp" not in files
     for name, path in files.items():
         head = path.read_bytes()[:12]
+        if name.endswith(".webm"):              # Karmi's loop: checked in tests/test_sommelier.py
+            assert head[:4] == b"\x1a\x45\xdf\xa3", name
+            continue
         assert head[:4] == b"RIFF" and head[8:12] == b"WEBP", name
         assert path.stat().st_size <= (500_000 if name.startswith("hero-") else 300_000), name
     config = tomllib.loads((REPO_ROOT / ".streamlit" / "config.toml").read_text())
     assert config["server"]["enableStaticServing"] is True
     css = (REPO_ROOT / "app" / "style.css").read_text()
     used = set(re.findall(r'url\("app/static/([^"]+)"\)', css))
+    # Karmi's video and its poster are named in app/karmi.py's <video> tag instead.
+    karmi = (REPO_ROOT / "app" / "karmi.py").read_text(encoding="utf-8")
+    used |= set(re.findall(r'(?:src|poster)="app/static/([^"]+)"', karmi))
     assert used == set(files)                  # no orphan files, no broken links
     assert "base64" not in css
 

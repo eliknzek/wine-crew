@@ -61,10 +61,20 @@ def _bubble(role: str, text: str) -> None:
         st.markdown(som.display_text(text).replace("$", "\\$"))
 
 
+# Karmi's 4-second loop (VP9 WebM, no audio) at the top of the panel, over the still image
+# (karmi-toast.webp, also its poster). Its <source> matches only without reduced motion, so with
+# reduced motion the browser loads no video and shows the still; style.css also hides it. The
+# header exists only while the panel is open, so the video is never fetched before that.
+VIDEO = ('<video class="karmi-video" autoplay muted loop playsinline aria-hidden="true" '
+         'poster="app/static/karmi-toast.webp">'
+         '<source src="app/static/karmi-loop.webm" type="video/webm" '
+         'media="(prefers-reduced-motion: no-preference)"></video>')
+
+
 def _header(demo: bool) -> str:
-    # The round image is the place for a short looping video of Karmi later (same size).
     demo_tag = f'<span class="karmi-demo">{som.DEMO_LABEL}</span>' if demo else ""
-    return (f'<div class="karmi-head"><div class="karmi-toast" role="img" aria-label="כרמי מרים כוס יין"></div>'
+    return (f'<div class="karmi-head"><div class="karmi-toast" role="img" aria-label="כרמי מרים כוס יין">'
+            f'{VIDEO}</div>'
             f'<div class="karmi-head-text"><div class="karmi-title">{html.escape(som.TITLE)}</div>'
             f'<div class="karmi-note">{html.escape(som.DISCLOSURE)}</div>{demo_tag}</div></div>')
 
