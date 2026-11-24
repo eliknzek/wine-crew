@@ -323,6 +323,95 @@
 }
 .wine-footer a { color: var(--wine-red); }
 
+/* ---- Karmi: the floating assistant (app/karmi.py) -------------------------------------- */
+/* Bottom-left: Streamlit Cloud's own badge takes the bottom-right corner. The popover button is
+   Karmi's face (a static WebP) in a thin gold ring with a soft shadow; its text label stays for
+   screen readers but is not shown. */
+.st-key-karmi {
+  position: fixed; left: 20px; bottom: 20px; z-index: 999;
+  width: 72px !important; gap: 0;
+  animation: karmi-float 4s ease-in-out infinite;
+}
+.st-key-karmi [data-testid="stElementContainer"]:has(.karmi-invite) { display: none; }
+.st-key-karmi button {
+  width: 72px; height: 72px; min-height: 0; padding: 0; border-radius: 50%;
+  background: var(--wine-cream) url("app/static/karmi-face.webp") center / cover no-repeat !important;
+  border: 2px solid var(--wine-gold) !important;
+  box-shadow: 0 4px 14px rgba(74, 8, 16, 0.28);
+  transition: transform 0.2s ease;
+}
+.st-key-karmi button > * { opacity: 0; }
+/* Hover and keyboard focus: a little bigger, tilted toward the panel (up and to the right). */
+.st-key-karmi button:hover, .st-key-karmi button:focus-visible { transform: scale(1.06) rotate(6deg); }
+.st-key-karmi button:focus-visible { outline: 3px solid var(--wine-red); outline-offset: 3px; }
+/* Invitation ring: a thin gold ring grows and fades every few seconds, only until the panel is
+   opened for the first time in the session (the marker is gone after that). */
+.st-key-karmi:has(.karmi-invite) button { animation: karmi-ring 3.5s ease-out infinite; }
+@keyframes karmi-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes karmi-ring {
+  0% { box-shadow: 0 4px 14px rgba(74, 8, 16, 0.28), 0 0 0 0 rgba(201, 162, 39, 0.75); }
+  45%, 100% { box-shadow: 0 4px 14px rgba(74, 8, 16, 0.28), 0 0 0 16px rgba(201, 162, 39, 0); }
+}
+/* The page ends above the button, so the footer can always be scrolled clear of it. */
+[data-testid="stMainBlockContainer"] { padding-bottom: 7rem; }
+
+/* The chat panel (only this popover: it holds the karmi_panel container). */
+[data-testid="stPopoverBody"]:has(.st-key-karmi_panel) {
+  width: 400px; min-width: 0; max-width: calc(100vw - 1.5rem);
+  border-top: 3px solid var(--wine-gold); background: var(--wine-card);
+}
+.st-key-karmi_panel { gap: 0.6rem; }
+.karmi-head { display: flex; align-items: center; gap: 0.85rem; direction: rtl; }
+.karmi-toast {
+  flex: 0 0 96px; height: 96px; border-radius: 50%;
+  background: var(--wine-cream) url("app/static/karmi-toast.webp") center / cover no-repeat;
+  border: 2px solid var(--wine-gold);
+}
+.karmi-title { font-family: var(--heading-font); font-weight: 700; font-size: 1.2rem; color: var(--wine-red); }
+.karmi-note { font-size: 0.8rem; color: #5A4E47; line-height: 1.35; margin-top: 0.2rem; }   /* 7.6:1 */
+.karmi-demo {
+  display: inline-block; margin-top: 0.35rem; padding: 0.05rem 0.5rem; border-radius: 2px;
+  font-size: 0.75rem; font-weight: 700; color: var(--wine-red); border: 1px solid var(--wine-red);
+}
+/* The scrolling history: Streamlit puts the fixed height on the wrapper around the container
+   (as its flex-basis, so both are set).
+   Shorter on short screens, so the panel (capped at the room above the button) keeps the input
+   in view. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-karmi_history) {
+  flex: 0 0 clamp(150px, calc(100vh - 480px), 340px) !important;
+  height: clamp(150px, calc(100vh - 480px), 340px) !important;
+}
+.st-key-karmi_history { border-color: #E8DFD2; }
+[data-testid="stPopoverBody"] [data-testid="stChatMessage"] { direction: rtl; text-align: right; gap: 0.6rem; padding: 0.5rem; }
+[data-testid="stPopoverBody"] [data-testid="stChatMessage"] .stMarkdown p { font-size: 0.95rem; }
+[data-testid="stPopoverBody"] [data-testid="stChatMessageAvatarCustom"] {
+  border-radius: 50%; border: 1.5px solid var(--wine-gold); object-fit: cover;
+}
+/* The user: a plain circle in the site's colors instead of Streamlit's default face icon. */
+[data-testid="stPopoverBody"] [data-testid="stChatMessageAvatarUser"] {
+  background: var(--wine-cream); border: 2px solid var(--wine-red); border-radius: 50%;
+}
+[data-testid="stPopoverBody"] [data-testid="stChatMessageAvatarUser"] > * { display: none; }
+[data-testid="stPopoverBody"] [data-testid="stChatInput"] textarea { direction: rtl; text-align: right; }
+.st-key-karmi_samples { gap: 0.35rem; }
+.st-key-karmi_samples button { justify-content: flex-start; text-align: right; min-height: 0; padding: 0.3rem 0.75rem; }
+.st-key-karmi_samples button p { font-size: 0.88rem; }
+/* "Typing": three dots that blink one after another while Karmi waits for the model. */
+.karmi-typing { display: inline-flex; gap: 5px; padding: 0.55rem 0; }
+.karmi-typing span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--wine-red);
+  animation: karmi-blink 1.2s ease-in-out infinite;
+}
+.karmi-typing span:nth-child(2) { animation-delay: 0.2s; }
+.karmi-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes karmi-blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+/* Reduced motion: no floating, ring, tilt or blinking. */
+@media (prefers-reduced-motion: reduce) {
+  .st-key-karmi, .st-key-karmi button, .karmi-typing span { animation: none !important; transition: none !important; }
+  .st-key-karmi button:hover, .st-key-karmi button:focus-visible { transform: none; }
+  .karmi-typing span { opacity: 0.7; }
+}
+
 /* ---- Mobile (narrow screens) ----------------------------------------------------------- */
 /* Metrics wrap instead of being cut ("2026-11-18 0..."). */
 [data-testid="stMetricValue"], [data-testid="stMetricValue"] > div {
@@ -370,4 +459,9 @@
   .tab-band { height: 64px; margin-bottom: 0.75rem; }
   .no-results { flex-direction: column; align-items: stretch; text-align: right; gap: 0.75rem; }
   .no-results-img { flex: none; width: 96px; height: 128px; align-self: center; order: -1; }   /* above the text */
+  /* Karmi: 56px in the corner; the panel almost the full width of the screen. */
+  .st-key-karmi { left: 12px; bottom: 12px; width: 56px !important; }
+  .st-key-karmi button { width: 56px; height: 56px; }
+  .karmi-toast { flex-basis: 72px; height: 72px; }
+  [data-testid="stMainBlockContainer"] { padding-bottom: 5.5rem; }
 }

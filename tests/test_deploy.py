@@ -1,5 +1,7 @@
 """What Streamlit Community Cloud needs: a slim app/requirements.txt pinned like the main lock,
-and an app that imports no crewai and reads no .env or clean_data.csv."""
+and an app that imports no crewai and reads no .env or clean_data.csv. openai is in the app's
+requirements for Karmi, but it is imported (and .env read) only when Karmi's panel is opened,
+so the start-up probe below still finds neither."""
 
 import os
 import re
@@ -26,7 +28,8 @@ def test_app_requirements_match_the_main_lock_and_skip_crewai():
     app, main = _pins(APP_REQUIREMENTS), _pins(REPO_ROOT / "requirements.txt")
     assert {"streamlit", "pandas", "numpy", "scikit-learn", "joblib", "pyyaml"} <= set(app)
     assert {name: app[name] for name in app} == {name: main[name] for name in app}
-    assert not any(name.startswith("crewai") or name in ("python-dotenv", "openai") for name in app)
+    assert "openai" in app                    # Karmi; same version as the main lock (checked above)
+    assert not any(name.startswith("crewai") or name == "python-dotenv" for name in app)
     assert all("==" in line or not line.strip() or line.lstrip().startswith("#")
                for line in APP_REQUIREMENTS.read_text().splitlines())   # no "-e ." or unpinned lines
 
