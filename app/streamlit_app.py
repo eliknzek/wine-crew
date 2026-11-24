@@ -593,7 +593,8 @@ def _karmi_data():
 
     return sommelier.Data(model=_model(ad.file_fingerprint([ad.model_file(config)])), metrics=metrics,
                           ranking=ranking, band=band, eda=data["eda_summary"], insights=data["insights"],
-                          contract=data["contract"], vintage_range=ad.vintage_range(config))
+                          contract=data["contract"], vintage_range=ad.vintage_range(config),
+                          price_edges=tuple(config["eda"]["price_bands"]))
 
 
 # Outside the tabs, so the button floats over every tab (style.css places it bottom-left).

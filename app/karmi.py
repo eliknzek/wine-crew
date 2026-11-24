@@ -15,6 +15,7 @@ from typing import Callable
 
 import streamlit as st
 
+from wine_crew import app_data as ad
 from wine_crew import sommelier as som
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -55,10 +56,74 @@ def first_answer_cache(fingerprint: tuple, model: str) -> Callable[[str, Callabl
     return cache
 
 
-def _bubble(role: str, text: str) -> None:
+OTHER = "אחר…"
+
+
+def wine_cards_html(wines: list[dict]) -> str:
+    """Small cards, one under the other, straight from the tool result: the name in bold (one
+    left-to-right unit), then tags: points and their word, the price in wine red, the signed
+    value score. No number here comes from the model's text."""
+    cards = "".join(
+        '<div class="karmi-wine">'
+        f'<div class="karmi-wine-name"><bdi dir="ltr">{html.escape(str(w["title"]))}</bdi></div>'
+        '<div class="karmi-tags">'
+        f'<span class="karmi-tag">{int(w["points"])} · {html.escape(w["score_label"])}</span>'
+        f'<span class="karmi-tag karmi-price">{ad.money(w["price"])}</span>'
+        f'<span class="karmi-tag">ציון שווי {ad.signed_html(w["value_score"])}</span>'
+        '</div></div>' for w in wines)
+    return f'<div class="karmi-cards">{cards}</div>'
+
+
+def prediction_card_html(block: dict) -> str:
+    """The predicted score and its word in large type, what it is for, and the 8-in-10 range."""
+    points, _, word = block["score"].partition(": ")
+    inputs = block["inputs"]
+    about = (f'<bdi dir="ltr">{html.escape(inputs["variety"])}</bdi> · '
+             f'{html.escape(ad.COUNTRY_HE.get(inputs["country"], inputs["country"]))} · {ad.money(inputs["price"])}')
+    sentence = f'<div class="karmi-predict-range">{html.escape(block["sentence"])}</div>' if block.get("sentence") else ""
+    return (f'<div class="karmi-predict"><div class="karmi-predict-for">{about}</div>'
+            f'<div class="karmi-predict-score"><span class="karmi-predict-points">{html.escape(points)}</span> '
+            f'<span class="karmi-predict-word">{html.escape(word)}</span></div>{sentence}</div>')
+
+
+def _send(message: str) -> None:
+    st.session_state[PENDING] = message
+
+
+def _send_other(index: int, sends: dict) -> None:
+    value = st.session_state.get(f"karmi_other_select_{index}")
+    if value:
+        _send(sends.get(value, str(value)))
+
+
+def _choices(block: dict, index: int, active: bool) -> None:
+    """Quick-choice buttons (options from the data), and "אחר…" with a searchable menu of all of
+    them that also takes typed text. A click sends the option as the user's message. Only the
+    latest message's buttons work; older ones stay visible, disabled."""
+    with st.container(horizontal=True, key=f"karmi_choices_{index}"):
+        for j, option in enumerate(block["options"]):
+            st.button(option["label"], key=f"karmi_choice_{index}_{j}", disabled=not active,
+                      on_click=_send, args=(option["send"],))
+        st.button(OTHER, key=f"karmi_other_{index}", disabled=not active,
+                  on_click=st.session_state.__setitem__, args=(f"karmi_other_open_{index}", True))
+    if active and st.session_state.get(f"karmi_other_open_{index}"):
+        sends = {o["label"]: o["send"] for o in block["all"]}
+        st.selectbox("כל האפשרויות", list(sends), index=None, key=f"karmi_other_select_{index}",
+                     placeholder="חפשו או הקלידו…", accept_new_options=True,
+                     on_change=_send_other, args=(index, sends), label_visibility="collapsed")
+
+
+def _bubble(role: str, text: str, blocks: list | None = None, index: int = -1, active: bool = False) -> None:
     with st.chat_message(role, avatar=str(FACE) if role == "assistant" else None):
         # "$" starts LaTeX in Streamlit markdown ("$20 ... $30" would turn into math).
         st.markdown(som.display_text(text).replace("$", "\\$"))
+        for block in blocks or []:
+            if block["type"] == "wines":
+                st.html(wine_cards_html(block["wines"]))
+            elif block["type"] == "prediction":
+                st.html(prediction_card_html(block))
+            elif block["type"] == "choices":
+                _choices(block, index, active)
 
 
 # Karmi's 4-second loop (VP9 WebM, no audio) at the top of the panel, over the still image
@@ -98,8 +163,9 @@ def _panel(load_data: Callable[[], som.Data], fingerprint: tuple, llm: dict, env
                else st.container(key="karmi_welcome"))
     with history:
         _bubble("assistant", som.WELCOME)
-        for role, text in state["shown"]:
-            _bubble(role, text)
+        last = len(state["shown"]) - 1
+        for i, item in enumerate(state["shown"]):
+            _bubble(item["role"], item["text"], item["blocks"], i, active=i == last and not pending)
     if not state["shown"] and not pending:
         with st.container(key="karmi_samples"):
             for i, sample in enumerate(som.SAMPLE_QUESTIONS):
@@ -133,6 +199,9 @@ def render(load_data: Callable[[], som.Data], fingerprint: tuple, llm: dict, env
         if not st.session_state.get(OPENED):
             # Marker for the gold "invitation" ring in style.css, until the first opening.
             st.html('<span class="karmi-invite" aria-hidden="true"></span>')
+        if chat.open:
+            # Marker: while the panel is open the button stands still (no float, no ring).
+            st.html('<span class="karmi-open" aria-hidden="true"></span>')
     if chat.open:   # lazy: nothing of the chat (key, openai, tools) runs while it is closed
         with chat, st.container(key="karmi_panel"):
             _panel(load_data, fingerprint, llm, env_file)

@@ -105,12 +105,16 @@ def test_tool_choice_runs_the_real_prediction_and_shows_the_answer(tools):
     expected = ad.predict_points(model, metrics, {"price": 20.0, "vintage": None, "country": "Argentina",
                                                   "province": province, "variety": "Malbec", "region_1": ad.UNKNOWN})
     assert f"{round(expected, 1)}" in shown and shown != som.FALLBACK
-    assert state["shown"] == [("user", som.SAMPLE_QUESTIONS[1]), ("assistant", shown)]
+    assert [(e["role"], e["text"]) for e in state["shown"]] == [("user", som.SAMPLE_QUESTIONS[1]), ("assistant", shown)]
+    [card] = state["shown"][1]["blocks"]                                    # the prediction card, from the tool
+    low, high = ad.prediction_range(expected, ad.residual_band(ad.load_ranking(CONFIG)))
+    assert card["type"] == "prediction" and card["predicted_points"] == round(expected, 1)
+    assert card["score"] == ad.score_text(expected) and f"בין {low} ל-{high}" in card["sentence"]
     assert state["count"] == 1 and len(client.requests) == 2
     first = client.requests[0]
     assert first["model"] == "gpt-4o-mini" and first["max_tokens"] == som.MAX_TOKENS
     assert {t["function"]["name"] for t in first["tools"]} == {
-        "predict_score", "find_value_wines", "similar_wines", "get_findings", "explain_term"}
+        "predict_score", "find_value_wines", "similar_wines", "get_findings", "explain_term", "ask_choice"}
 
 
 @needs_artifacts
@@ -346,8 +350,8 @@ def test_demo_mode_shows_its_label_and_answers_a_sample(app, monkeypatch):
     app.button(key="karmi_sample_3").click().run()
     assert not app.exception
     state = app.session_state["karmi_state"]
-    assert state["shown"][0] == ("user", "מה זה ציון שווי?")
-    assert ad.GLOSSARY["ציון שווי"].split(".")[0] in state["shown"][1][1]
+    assert (state["shown"][0]["role"], state["shown"][0]["text"]) == ("user", "מה זה ציון שווי?")
+    assert ad.GLOSSARY["ציון שווי"].split(".")[0] in state["shown"][1]["text"]
     assert not [b for b in app.button if b.key and b.key.startswith("karmi_sample_")]   # samples gone
 
 
@@ -400,27 +404,6 @@ def test_display_isolates_latin_names_and_signed_numbers_only_for_display():
     assert "⁨Château Marsau 2012  Blaye Côtes de Bordeaux⁩" in shown
     assert "⁦+5.6⁩" in shown and "ל-89" in shown           # "ל-89" is not a signed number
     assert som.answer_number_violations(raw, [2012, 18, 92, 5.6, 84, 89]) == []
-
-
-def test_wine_lists_are_two_lines_name_then_details_in_a_fixed_order():
-    wines = [{"title": "Château Blaignan 2010  Médoc", "details": som.wine_details(92, 16.0, 5.5123)}]
-    assert wines[0]["details"] == "ניקוד 92 · $16 · ציון שווי +5.5"
-    listed = som.wine_list(wines)
-    assert listed == "- Château Blaignan 2010  Médoc\n  ניקוד 92 · $16 · ציון שווי +5.5"
-    shown = som.display_text(listed)
-    name_line, details_line = shown.split("\n")
-    assert name_line == "- ⁦Château Blaignan 2010  Médoc⁩  "     # one LTR unit, then a line break
-    assert details_line == "  ניקוד 92 · $16 · ציון שווי ⁦+5.5⁩"
-    assert "9. כשאתה מציג יינות, העתק את השדה wine_list" in som.SYSTEM_PROMPT
-
-
-@needs_artifacts
-def test_value_tool_returns_the_ready_two_line_list(tools):
-    result = tools.call("find_value_wines", {"max_price": 30, "limit": 2})
-    lines = result["wine_list"].split("\n")
-    assert len(lines) == 4 and lines[0] == f"- {result['wines'][0]['title']}"
-    assert lines[1] == "  " + result["wines"][0]["details"]
-    assert re.fullmatch(r"  ניקוד \d+ · \$\d+ · ציון שווי [+-]\d+\.\d", lines[1])
 
 
 # --------------------------------------------------------------------------- Karmi's video
@@ -518,8 +501,152 @@ def test_color_note_is_added_once_only_for_color_questions_with_a_wine_search():
 @needs_artifacts
 def test_red_request_from_the_model_gets_the_color_line_and_no_rose(tools):
     args = {"max_price": 30, "countries": ["France"], "varieties": ["Merlot", "Syrah"], "exclude_rose": True}
-    client = FakeClient(calls(("find_value_wines", args)),
-                        lambda messages: text("הנה יינות אדומים:\n" + last_tool_result(messages)["wine_list"]))
+    client = FakeClient(calls(("find_value_wines", args)), text("הנה יינות אדומים ששווים את המחיר:"))
     state = som.new_state()
     shown = run(state, som.SAMPLE_QUESTIONS[0], client, tools)
     assert shown.endswith(som.COLOR_NOTE) and "Rosé" not in shown
+
+
+# --------------------------------------------------------------------------- cards and quick choices
+
+def _karmi():
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "app"))
+    import karmi
+
+    return karmi
+
+
+@needs_artifacts
+def test_wine_cards_come_from_the_tool_with_the_right_numbers(tools):
+    args = {"max_price": 30, "countries": ["France"], "limit": 4}
+    client = FakeClient(calls(("find_value_wines", args)), text("מצאתי יינות ששווים את המחיר שלהם:"))
+    state = som.new_state()
+    run(state, "יין מצרפת עד $30", client, tools)
+    [block] = state["shown"][1]["blocks"]
+    expected = ad.filter_ranking(ad.load_ranking(CONFIG), ["France"], None, None, 30.0, 4)
+    assert block["type"] == "wines"
+    assert [w["title"] for w in block["wines"]] == list(expected["title"])
+    assert [w["points"] for w in block["wines"]] == list(expected["points"])
+    assert [w["value_score"] for w in block["wines"]] == [round(v, 1) for v in expected["value_score"]]
+    page = _karmi().wine_cards_html(block["wines"])
+    for wine in expected.itertuples():
+        import html as html_lib
+
+        assert html_lib.escape(wine.title) in page and ad.money(wine.price) in page
+        assert ad.signed_html(round(wine.value_score, 1)) in page and f">{wine.points} · {ad.score_label(wine.points)}<" in page
+    assert '<bdi dir="ltr">' in page
+
+
+@needs_artifacts
+def test_karmis_text_never_repeats_the_list_the_cards_show(tools):
+    def listing(messages):
+        wines = last_tool_result(messages)["wines"]
+        return text("הנה מה שמצאתי:\n" + "\n".join(f"- {w['title']}: ${w['price']:g}" for w in wines)
+                    + f"\nהראשון, {wines[0]['title']}, הכי שווה.\nבתיאבון!")
+
+    client = FakeClient(calls(("find_value_wines", {"max_price": 30, "limit": 3})), listing)
+    state = som.new_state()
+    shown = run(state, "יין עד $30", client, tools)
+    titles = [w["title"] for w in state["shown"][1]["blocks"][0]["wines"]]
+    assert shown == "הנה מה שמצאתי:\nבתיאבון!"
+    assert not any(t in shown for t in titles) and len(titles) == 3
+    assert som.strip_listed_wines("- רק רשימה", []) == "- רק רשימה"          # never leaves an empty answer
+
+
+@needs_artifacts
+def test_choice_buttons_offer_only_options_from_the_data(tools):
+    ranking = ad.load_ranking(CONFIG)
+    italy = tools.call("ask_choice", {"field": "variety", "country": "איטליה"})
+    italian = set(ranking.loc[ranking["country"] == "Italy", "variety"])
+    assert len(italy["options"]) == 6 and {o["send"] for o in italy["all"]} == italian
+    assert [o["send"] for o in italy["options"]] == list(
+        ranking.loc[ranking["country"] == "Italy", "variety"].value_counts().head(6).index)
+    red = tools.call("ask_choice", {"field": "variety", "country": "France", "exclude_rose": True})
+    assert not any(som.ROSE.search(o["send"]) for o in red["all"])
+    countries = tools.call("ask_choice", {"field": "country"})
+    assert all(o["label"] == ad.country_label(o["label"].split(" (")[-1].rstrip(")")) for o in countries["options"])
+    budget = tools.call("ask_choice", {"field": "budget"})
+    assert [o["label"] for o in budget["options"]] == ["$10", "$15", "$20", "$30", "$50", "$100"]
+    assert {float(o["label"][1:].replace(",", "")) for o in budget["all"]} <= set(CONFIG["eda"]["price_bands"])
+    assert "error" in tools.call("ask_choice", {"field": "color"})
+
+
+def test_demo_choice_flow_buttons_send_messages_and_end_with_cards(app, monkeypatch):
+    monkeypatch.setenv(som.DEMO_ENV, "1")
+    app.session_state["karmi_chat"] = True
+    app.session_state["karmi_pending"] = som.DEMO_CHOICE_QUESTION
+    app.run()
+    first = app.button(key="karmi_choice_1_0")
+    variety = first.label
+    first.click().run()
+    assert not app.exception
+    state = app.session_state["karmi_state"]
+    assert (state["shown"][2]["role"], state["shown"][2]["text"]) == ("user", variety)   # the click = a message
+    assert app.button(key="karmi_choice_1_0").disabled                       # older buttons: disabled
+    budget = app.button(key="karmi_choice_3_3")
+    assert budget.label == "$30" and not budget.disabled
+    budget.click().run()
+    assert state["shown"][4]["text"] == "עד $30"
+    cards = state["shown"][5]["blocks"][0]
+    assert cards["type"] == "wines" and all(w["variety"] == variety and w["price"] <= 30 for w in cards["wines"])
+    app.run()                                                                # a plain rerun keeps everything
+    bodies = [h.proto.body for h in app.get("html")]
+    assert sum('class="karmi-cards"' in b for b in bodies) == 1
+    assert all(f">{html_escape(w['title'])}<" in "".join(bodies) for w in cards["wines"])
+    assert app.button(key="karmi_choice_1_0").disabled and app.button(key="karmi_choice_3_3").disabled
+
+
+def test_other_menu_lists_every_option_and_sends_the_choice(app, monkeypatch):
+    monkeypatch.setenv(som.DEMO_ENV, "1")
+    app.session_state["karmi_chat"] = True
+    app.session_state["karmi_pending"] = som.DEMO_CHOICE_QUESTION
+    app.run()
+    app.button(key="karmi_other_1").click().run()
+    menu = app.selectbox(key="karmi_other_select_1")
+    block = app.session_state["karmi_state"]["shown"][1]["blocks"][0]
+    assert list(menu.options) == [o["label"] for o in block["all"]]
+    menu.select("Barbera").run()
+    assert app.session_state["karmi_state"]["shown"][2]["text"] == "Barbera"
+
+
+def html_escape(text):
+    import html as html_lib
+
+    return html_lib.escape(text)
+
+
+def test_css_animates_only_the_buttons_drawing_never_the_panel():
+    css = re.sub(r"/\*.*?\*/", "", (REPO_ROOT / "app" / "style.css").read_text(encoding="utf-8"), flags=re.S)
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+    for selector, body in rules:
+        animated = re.search(r"animation\s*:\s*(?!none)", body)
+        if not animated:
+            continue
+        parts = [p.strip() for p in selector.split(",")]
+        assert not any(p in (".st-key-karmi",) or "stPopoverBody" in p or "karmi_panel" in p for p in parts), selector
+        assert all(p.endswith(("::before", "::after")) or "karmi-typing" in p for p in parts), selector
+    stop = re.search(r"\.st-key-karmi:has\(\.karmi-open\) button::before,\s*"
+                     r"\.st-key-karmi:has\(\.karmi-open\) button::after\s*\{([^}]*)\}", css)
+    assert stop and "animation: none" in stop.group(1)
+    source = (REPO_ROOT / "app" / "karmi.py").read_text(encoding="utf-8")
+    assert 'class="karmi-open"' in source
+
+
+def test_open_marker_only_while_the_panel_is_open(app):
+    def marked():
+        return any('class="karmi-open"' in h.proto.body for h in app.get("html"))
+    assert not marked()
+    app.session_state["karmi_chat"] = True
+    app.run()
+    assert marked()
+
+
+def test_display_isolates_latin_extended_names():
+    assert som.display_text("אפשרויות: Barbera, Babić.") == "אפשרויות: ⁨Barbera, Babić⁩."
+
+
+def test_prompt_keeps_color_requests_away_from_variety_buttons():
+    rule = next(line for line in som.SYSTEM_PROMPT.splitlines() if line.startswith("10."))
+    assert "ask_choice רק כשחסר" in rule and "אל תשאל על זן" in rule and "כלל 5" in rule
